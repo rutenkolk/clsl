@@ -1,4 +1,4 @@
-#f3d / clsl
+# Clsl
 
 Graphics development in Clojure.
 
@@ -48,6 +48,14 @@ As you can see there is still a ton of work to be done.
 
 In the meantime: Please check out the demos.clj file for things that absolutely should work right at this moment.
 
+## Caveats
+
+Vertex-Shaders *need* to output the final position. Therefore the first output of a vertex-shader is always the position assignment.
+So be carful when you query (first (shader-outputs my-vert-shader)) as this will give you first output _after_ the position. So this will be the second value in the vector you typed as the output for the vertex-shader.
+
+Fragment shaders *need* to output a color. So there can only be one output. OpenGL/Vulkan technically allow for more than this, but more than one framebuffer render target is not supported (yet?).
+
+As of right now, vertex shaders need their output to be typed manually. So wrap all normal output-expressions from a vertex-shader with a (typed :my-type expr).
 
 ## License
 
