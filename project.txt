@@ -1,0 +1,73 @@
+One of the major problems when writing graphics applications with traditional solutions is the 
+strict seperation between shader and application code. Sometimes this distinction also is called
+host and device code. The former runs on the cpu while the latter runs on the gpu device 
+of the system. This certainly is a sensible distinction from an architectural point of view. 
+But does the client code to these graphics APIs actually need this strict distinction? For this
+we have to look at the concepts behind the most popular APIs. The excution model presented by 
+these APIs is the SIMD (Single Instruction Multiple Data) model. The programming model on the other
+hand facilitated by OpenGL, Cuda, Vulkan and other similar APIs that interact with the GPU is the 
+SPDM (Single Program Multiple Data) model. The match here is quite logical. When the device 
+executes an instruction, it does so on multiple data entries in parallel. 
+If so: why not write a single program, processing a single data entry and simply map it to the 
+parallel execution abilites of the device?
+
+Again, from the technical point of view, there is very little to say about this approach.
+From a client-code perspective however, here is why:
+
+1. Host and Device code diverges in language.
+2. Host and Device code diverges in style.
+3. Poor reusablity. Device code is only usable in other device code parts.
+4. As a direct result of 3: Testing device code becomes nearly impossible.
+5. Device code arguments are defined explicitly in the device code but infered implicitly from the 
+	data supplied by the host code. The case could be made, that there is either not enough 
+	explicity in the host code, or too much in the device code.
+6. Dependency issues: Device code relies on invocations of other device code, but this 'pipeline' 
+	is defined in the host code. This facilitates strong coupling between the strictly 
+	seperated host and device code.
+7. Complicated State Management: Device code may rely on device state besides simple arguments, 
+	which has to be set in a non-SPDM manner, which often results in state-setup in host code 
+	and state-use in device code. If device code itself changes device state, further device 
+	code invocations rely not only on host code but previous invocations of device code, 
+	which are again defined in host code. 
+	One could make the point, that this is actually just another form of a hidden dependency 
+	issue. The vicious nature of this behaviour however, makes it noteworthy non-the-less. 
+	(Note: Vulkan actually adresses this issue and provides 'Pipeline State', but it still 
+	does not eliminate this problem completely)
+
+Because of these problems, not seperating host and device code is proposed.
+Which code should and can be coupled together is an isssue of the client to the API.
+To avoid this mismatch, the goal is to provide mechanisms behaving more uniformly than traditional
+graphics APIs. 
+Note, that we still want to maintain the SPMD nature of the programming model.
+The idea is to use a dsl, wich abstracts over the nature of the more technical APIs, generates 
+building blocks from which shaders and interactions with them can be constructed. An obvious 
+challenge is maintaining a sensible degree of customization and fine-tuning capablities.
+
+Expressing the SPMD part of the program through a dsl, which can be run on both the host and the 
+device tackles problems 1-4. The idea is here, that the client code is no longer bound by the 
+definition of shaders as for example OpenGL and Vulkan understand them. Not having to write 
+full-fledged shaders gives rise to more reusablity. 
+At the end of the day, a shader or kernel must be compiled and run on the gpu, but clsl provides
+virtual late binding to a degree. As long as the shader is not executed on the device the 
+definition of the shader can be incomplete and depend on runtime factors.
+This allows for a more flexible definition of functions and composablity of them.
+Since we don't need to compile a full shader, we can create functions, which can be executed
+independently of each other and any state on the host. This makes testing these functions 
+feasible.
+Since a functional style of programming is proposed, the shader-functions actually can 
+be converted to regular clojure functions which can be called with actual clojure 
+datastructures.
+
+
+A Functional Graphics API
+
+Why consider a functioal graphics API?
+Tranditional graphics APIs rely heavily on state. Needless to say state management is a huge issue
+when normally writing a graphics application. This poses a number of problems to the API client.
+Especially OpenGL handles state in an unfortunate way. The common pattern looks like this:
+set up state, drawcall, set up state, drawcall, etc..
+Not only is this potentially ineffictient, as the client code has to manage state reuse,
+but it is also inherently complex. Performing a draw-call depends on the already existing
+OpenGL-state. Dependencies between drawcalls are practically unavoidable.
+To solve this problem of state management, a functional approach is proposed.
+
