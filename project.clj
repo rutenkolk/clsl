@@ -86,5 +86,5 @@
   :min-lein-version "2.1.0"
   :jvm-opts ^:replace ~(jvm-opts)
   :main clsl.demos
-  :aot [clsl.core clsl.demos]
+  ;:aot [clsl.core clsl.demos]
   )

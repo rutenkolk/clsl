@@ -1306,7 +1306,7 @@ new-pipe (assoc-in
         image-type (.getType img) ;internal java buffered image type
         [internal-format img-format read-type] (cond 
           (= image-type java.awt.image.BufferedImage/TYPE_3BYTE_BGR) [GL_RGB GL_RGB GL_UNSIGNED_BYTE]
-          (= image-type java.awt.image.BufferedImage/TYPE_4BYTE_ABGR) [GL_RGBA GL_RGBA GL_UNSIGNED_BYTE]
+          (= image-type java.awt.image.BufferedImage/TYPE_4BYTE_ABGR) [GL_RGBA8 GL_RGBA GL_UNSIGNED_BYTE] ;this gets triggered
           (= image-type java.awt.image.BufferedImage/TYPE_4BYTE_ABGR_PRE) [GL_RGBA GL_RGBA GL_UNSIGNED_BYTE]
           (= image-type java.awt.image.BufferedImage/TYPE_BYTE_BINARY) [GL_RED GL_RED GL_UNSIGNED_BYTE]
           (= image-type java.awt.image.BufferedImage/TYPE_BYTE_GRAY) [GL_RED GL_RED GL_UNSIGNED_BYTE]
@@ -1328,9 +1328,22 @@ new-pipe (assoc-in
         texImage-data (if (= byte-array-type (type pixeldata))
                         (java.nio.ByteBuffer/wrap pixeldata)
                         pixeldata)
+        _ (.flip texImage-data)
         texid (glGenTextures)
+        _ (glEnable GL_TEXTURE_2D)
         _ (glBindTexture GL_TEXTURE_2D texid)
-        _ (glTexImage2D GL_TEXTURE_2D 0 internal-format nImageWidth nImageHeight 0 img-format read-type texImage-data)
+        _ (println "pixeldata type: " (type pixeldata))
+        _ (println "pixeldata size: " (count pixeldata))
+        _ (println "pixeldata size should be: " (* 256 256 4))
+        _ (println (format "errorcode:%d\n internal-format:%d\n nImageWidth:%d\n nImageHeight:%d\n img-format:%d\n read-type:%d\n" 
+                           (glGetError) internal-format nImageWidth nImageHeight img-format read-type))
+        _ (pp (Thread/currentThread))
+        ex-bb (org.lwjgl.BufferUtils/createByteBuffer (* nImageWidth nImageHeight 4)) 
+        _ (doall (map (fn [elem] (.put ex-bb elem)) pixeldata))
+        _ (.flip ex-bb)
+        ;_ (throw (NullPointerException. "Safety Aaahaahaha"))
+        ;_ (with-glGetError (glTexImage2D GL_TEXTURE_2D 0 GL_RGBA8 256 256 0 GL_RGBA GL_UNSIGNED_BYTE ex-bb))
+        _ (with-glGetError (glTexImage2D GL_TEXTURE_2D 0 internal-format nImageWidth nImageHeight 0 img-format read-type ex-bb))
         _ (glGenerateMipmap GL_TEXTURE_2D)
         _ (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S GL_CLAMP_TO_EDGE)
         _ (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T GL_CLAMP_TO_EDGE)
@@ -1569,6 +1582,8 @@ new-pipe (assoc-in
               nil)))]
     (try
       (println "INIT...")
+      (println "RUNNING ON THREAD: " )
+      (pp (Thread/currentThread))
       (with-local-vars [start-t (System/nanoTime)
                         num-frames 0] 
       (let [update-thread (Thread. (fn [] (while (not (:should-stop? @global-state)) (update!))))

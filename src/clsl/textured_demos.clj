@@ -40,7 +40,7 @@
            (c/mul (c/sub 1 factor) color))))
 
 (def texture-render-pipeline
-  (let [vert-out (c/shader-output demo-vert-shader)] 
+  (let [vert-out (c/shader-output texture-vert-shader)] 
     (c/simple-pipeline [pos cool_texture uv_coords color mvp blend]
       [(c/prime-shader 
          texture-vert-shader pos uv_coords mvp color) 
@@ -83,5 +83,6 @@
 
 (comment 
   "evaluating the expression below may show you textured triangles" 
+  (/ 262144 (* 256 256))
   (demo)
   )
