@@ -1344,13 +1344,13 @@ new-pipe (assoc-in
         ;_ (throw (NullPointerException. "Safety Aaahaahaha"))
         ;_ (with-glGetError (glTexImage2D GL_TEXTURE_2D 0 GL_RGBA8 256 256 0 GL_RGBA GL_UNSIGNED_BYTE ex-bb))
         _ (with-glGetError (glTexImage2D GL_TEXTURE_2D 0 internal-format nImageWidth nImageHeight 0 img-format read-type ex-bb))
-        _ (glGenerateMipmap GL_TEXTURE_2D)
-        _ (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S GL_CLAMP_TO_EDGE)
-        _ (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T GL_CLAMP_TO_EDGE)
-        _ (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER GL_LINEAR)
-        _ (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER GL_LINEAR_MIPMAP_LINEAR)
-        fLargest (glGetFloat org.lwjgl.opengl.EXTTextureFilterAnisotropic/GL_TEXTURE_MAX_ANISOTROPY_EXT)
-        _ (glTexParameterf GL_TEXTURE_2D org.lwjgl.opengl.EXTTextureFilterAnisotropic/GL_TEXTURE_MAX_ANISOTROPY_EXT fLargest)]
+        _ (with-glGetError (glGenerateMipmap GL_TEXTURE_2D))
+        _ (with-glGetError (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S GL_CLAMP_TO_EDGE))
+        _ (with-glGetError (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T GL_CLAMP_TO_EDGE))
+        _ (with-glGetError (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER GL_LINEAR))
+        _ (with-glGetError (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER GL_LINEAR_MIPMAP_LINEAR))
+        fLargest (with-glGetError (glGetFloat org.lwjgl.opengl.EXTTextureFilterAnisotropic/GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT))
+        _ (with-glGetError (glTexParameterf GL_TEXTURE_2D org.lwjgl.opengl.EXTTextureFilterAnisotropic/GL_TEXTURE_MAX_ANISOTROPY_EXT fLargest))]
     texid))
 
 (defn buf [coll]
