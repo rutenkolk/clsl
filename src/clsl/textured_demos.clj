@@ -40,7 +40,7 @@
            (c/mul (c/sub 1 factor) color))))
 
 (def texture-render-pipeline
-  (let [vert-out (c/shader-output texture-vert-shader)] 
+  (let [vert-out (c/shader-output texture-vert-shader)] ;vert-out = [:color :texture_coords]
     (c/simple-pipeline [pos cool_texture uv_coords color mvp blend]
       [(c/prime-shader 
          texture-vert-shader pos uv_coords mvp color) 
@@ -54,9 +54,9 @@
              t [:time]]
     texture-render-pipeline 
     [(c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4 :vec2) 0)
-     (c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4 :vec2) (c/size-of-type :vec4))
      (c/texture-2d-take my-texture)
-     (c/buf-take tr-buf :vec2 (c/size-of-type :vec4 :vec4 :vec2) (c/size-of-type :vec4 :vec4))
+     (c/buf-take tr-buf :vec2 (c/size-of-type :vec4 :vec4 :vec2) (c/size-of-type :vec4))
+     (c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4 :vec2) (c/size-of-type :vec4 :vec2))
      (let [adjusted_t (* t 0.001)] 
        (glm.mat4x4.Mat4.
         (*  2.0 (Math/cos adjusted_t))  (* 1.0 (Math/sin adjusted_t)) 0.0 0.0
@@ -83,6 +83,5 @@
 
 (comment 
   "evaluating the expression below may show you textured triangles" 
-  (/ 262144 (* 256 256))
   (demo)
   )

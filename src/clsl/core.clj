@@ -554,7 +554,7 @@
              (map vector (filter symbol? (keys body)) 
                   (repeat (count (filter symbol? (keys body))) :out)))))
     ;implicit (gl_pos, gl_color) assign. no further output
-    (vec (concat input-bindings ['outColor :vec3 :out]))))
+    (vec (concat input-bindings ['outColor :vec4 :out]))))
 (defn vertex-shader* [vars body]
   {:type :shader
    :name "vertex-shader"
@@ -571,7 +571,7 @@
 
 (defmacro fragment-shader-output [input-bindings body ]
   ;implicit outcolor assign
-  `(assign (var-reference "outColor" :vec3 :out) ~body))
+  `(assign (var-reference "outColor" :vec4 :out) ~body))
 
 (defn fragment-shader* [vars body]
   {:type :shader
@@ -826,7 +826,7 @@ just extend the protocol to your liking"
 
     (= :mat4 t)   (fn [loc v] (glUniformMatrix4fv loc false v))
     
-    (= :sampler2d t) (fn [loc v] (glActiveTexture (+ GL_TEXTURE0 loc)) 
+    (= :sampler2D t) (fn [loc v] (glActiveTexture (+ GL_TEXTURE0 loc)) 
                                  (glBindTexture GL_TEXTURE_2D v) 
                                  (glUniform1i loc loc))))
 
@@ -1262,7 +1262,7 @@ new-pipe (assoc-in
 (defn texture-2d-take [texture-id] 
   {:name :texture-2d-take
    :tex-id texture-id 
-   :glsl-type :sampler2d})
+   :glsl-type :sampler2D})
 
 ;to compile a drawer to glsl, you need an init-state!
 (defn drawer* [query pipe interface-fill drawcmds-fn]
