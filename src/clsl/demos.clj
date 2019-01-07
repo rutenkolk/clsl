@@ -9,21 +9,21 @@
    0.5 -0.5  0.0  1.0]) ; 3. Vertex 
 
 (def colors
-  ;R   G   B 
-  [1.0 0.0 0.0
-   0.0 1.0 0.0
-   0.0 0.0 1.0])
+  ;R   G   B   A
+  [1.0 0.0 0.0 1.0
+   0.0 1.0 0.0 1.0
+   0.0 0.0 1.0 1.0])
 
 (def interleaved-data
   (vec 
     (flatten 
       (interleave (partition 4 4 positions)
-                  (partition 3 3 colors)))))
+                  (partition 4 4 colors)))))
 
 (def demo-vert-shader
   (c/vertex-shader [pos trans_mat color]
     [(c/mul trans_mat pos)
-     (c/typed :vec3 color)]))
+     (c/typed :vec4 color)]))
 
 (def demo-frag-shader
   (c/fragment-shader [color factor]
@@ -40,8 +40,8 @@
              tr-buf-count [:objs :tr-buf-count]
              t [:time]]
     demo-render-pipeline
-    [(c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec3) 0)
-     (c/buf-take tr-buf :vec3 (c/size-of-type :vec4 :vec3) (c/size-of-type :vec4))
+    [(c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4) 0)
+     (c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4) (c/size-of-type :vec4))
      (let [adjusted_t (* t 0.001)] 
        (glm.mat4x4.Mat4.
         (*  2.0 (Math/cos adjusted_t))  (* 1.0 (Math/sin adjusted_t)) 0.0 0.0
@@ -66,8 +66,8 @@
   "Demo 1 completed. Global State has been reset!")
 
 (defn demo2-fill-in [tr-buf tr-buf-count t]
-  [(c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec3) 0)
-   (c/buf-take tr-buf :vec3 (c/size-of-type :vec4 :vec3) (c/size-of-type :vec4))
+  [(c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4) 0)
+   (c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4) (c/size-of-type :vec4))
    (let [adjusted_t (* t -0.001)] 
      (glm.mat4x4.Mat4.
       (*  2.0 (Math/cos adjusted_t))  (* 1.0 (Math/sin adjusted_t)) 0.0 0.0

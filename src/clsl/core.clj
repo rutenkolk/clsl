@@ -949,16 +949,46 @@ pipe-in-variables (filter (fn [elem]
 
 interface-init-fill ((:interface-fill arg) init-state)
 
-init-fn (fn [drawer] 
+init-fn (fn [drawer] ;here is the nullpointer! argh TODO
              (let[
                vao-id (glGenVertexArrays)
                _ (glBindVertexArray vao-id)
+               i-in-fill (map (comp (partial nth interface-init-fill) second) 
+                              (filter (comp (partial = :in) first) 
+                                      (partition 2 2 (interleave i-face-modifiers (range)))))
+               _ (println "i-face-modifiers:")
+               _ (pp i-face-modifiers)
+               _ (println "pipe-in-variables")
+               _ (pp pipe-in-variables)
+               _ (println "interface-init-fill")
+               _ (pp interface-init-fill)
+               _ (println "i-in-fill")
+               _ (pp i-in-fill)
                _ (dotimes [i (count (filter #(= :in %) i-face-modifiers))]
                    (let [i-var (nth pipe-in-variables i)]
+                     (println "glBindBuffer with id from: ")
+                     (pp (nth i-in-fill i))
                      (glBindBuffer 
                        GL_ARRAY_BUFFER 
-                       (:buf-id (nth interface-init-fill i)))
+                       (:buf-id (nth i-in-fill i)))
+                     (println "enablevertexattriarray " (:layout i-var))
                      (glEnableVertexAttribArray (:layout i-var))
+                    (println
+                      `(glVertexAttribPointer 
+                       ;layout location
+                       ~(:layout i-var)
+                       ;num-elements
+                       ~(first (glsl-keyword-type-to-num-and-elem-type (:type i-var)))
+                       ;GL_TYPE
+                       ~(second (glsl-keyword-type-to-num-and-elem-type 
+                         (:type i-var)))
+                       ;normalized? (no support for this)
+                       false 
+                       ;stride
+                       ~(:stride (nth i-in-fill i))
+                       ;extra offset to buf
+                       ~(:offset (nth i-in-fill i)))
+                      )
                      (glVertexAttribPointer 
                        ;layout location
                        (:layout i-var)
@@ -970,14 +1000,18 @@ init-fn (fn [drawer]
                        ;normalized? (no support for this)
                        false 
                        ;stride
-                       (:stride (nth interface-init-fill i))
+                       (:stride (nth i-in-fill i))
                        ;extra offset to buf
-                       (:offset (nth interface-init-fill i)))))]
+                       (:offset (nth i-in-fill i)))))]
                (assoc drawer :vao vao-id)))
 
 exec-fn (let 
-          [uniform-calls (for [i (range (count 
-                                       (filter #(= :uniform %) i-face-modifiers)))] 
+          [_ (println "--- exec-fn ---")
+           _ (println "uniform calls iterating over:")
+           _ (pp (for [i (range (count (filter #(= :uniform %) i-face-modifiers))) :when (not (= :sampler2D (:type (nth all-uniform-variables i))))]
+                   (nth all-uniform-variables i)))
+           uniform-calls (for [i (range (count (filter #(= :uniform %) i-face-modifiers)))
+                               :when (not (= :sampler2D (:type (nth all-uniform-variables i))))] 
                            (let [i-var (nth all-uniform-variables i)] 
                              (partial 
                                (uniform-fn-for-glsl-type (:type i-var))
@@ -993,6 +1027,12 @@ exec-fn (let
                              ))]
             (fn [drawer latest-state]
               (let [uniform-values ((:interface-fill arg) latest-state)]
+;                (println "--- calling exec-fn ---")
+;                (pp uniform-values)
+;                (pp uniform-calls)
+;                (pp (map-indexed #(vector %2 (load-value-to-array 
+;                                      (nth uniform-values (index-map %1)))) 
+;                               uniform-calls))
                 (glUseProgram (:program drawer))
                 (glBindVertexArray (:vao drawer))
                 ;TODO: bind textures etc..
@@ -1501,7 +1541,8 @@ new-pipe (assoc-in
 (defn compile-drawer [drawer]
   (if (:program drawer)
     drawer ;already ret-2-go
-    (let [prim-drawer (to-primitives drawer)
+    (let [_ (println "oh no. the drawer does not have a program. COMPILING ...")
+          prim-drawer (to-primitives drawer)
           shdrs (compile-glsl prim-drawer)
           program (create-simple-program 
                     (:vertex-shader shdrs)
@@ -1510,6 +1551,7 @@ new-pipe (assoc-in
                                           :program
                                           program)
           _ (println "before init fn error state: " (glGetError))
+          _ (pp (:init-fn prim-with-program-drawer))
           res ((:init-fn prim-with-program-drawer) prim-with-program-drawer)
           _ (println "after init fn error state: " (glGetError))]
       res
@@ -1594,9 +1636,13 @@ new-pipe (assoc-in
         (println "CALLING INIT-FN...")
         (with-glGetError (swap! global-state init-fn))
         (println "ENTERING HOT LOOP...")
+        (println "UPDATE WITH CONTEXT...")
         (update-with-context! true)
+        (println "UPDATE...")
         (update!)
+        (println "STARTING UPDATE THREAD...")
         (.start update-thread)
+        (println "ENTERING HOT LOOP...")
         (while (not (glfwWindowShouldClose window-handle))
           (let [curr-t (System/nanoTime)] 
             (if (> (- curr-t @start-t) 1000000)

@@ -35,8 +35,8 @@
      (c/typed :vec2 texture_coords)]))
 
 (def texture-frag-shader
-  (c/fragment-shader [color sampler uv factor]
-    (c/add (c/mul factor (c/sample sampler uv))
+  (c/fragment-shader [color texture1 uv factor]
+    (c/add (c/mul factor (c/sample texture1 uv))
            (c/mul (c/sub 1 factor) color))))
 
 (def texture-render-pipeline
