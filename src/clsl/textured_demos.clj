@@ -96,7 +96,5 @@
   "Demo completed. Global State has been reset!")
 
 (comment 
-  (clojure.pprint/pprint (partition 10 10 interleaved-data-2))
   "evaluating the expression below may show you textured triangles" 
-  (demo)
-  )
+  (demo))

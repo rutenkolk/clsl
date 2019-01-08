@@ -1399,7 +1399,8 @@ new-pipe (assoc-in
         buf-obj-id (glGenBuffers)
         _ (glBindBuffer GL_ARRAY_BUFFER buf-obj-id)
         _ (glBufferData GL_ARRAY_BUFFER host-buf GL_STATIC_DRAW)
-        _ (glBindBuffer GL_ARRAY_BUFFER 0)]
+        _ (glBindBuffer GL_ARRAY_BUFFER 0)
+        ]
     buf-obj-id))
 
 ;state-change fns:
