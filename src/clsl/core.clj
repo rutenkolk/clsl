@@ -1350,46 +1350,126 @@ new-pipe (assoc-in
   [path]
   (let [img (ImageIO/read (io/file path)) ;BufferedImage
         image-type (.getType img) ;internal java buffered image type
-        [internal-format img-format read-type] (cond 
-          (= image-type java.awt.image.BufferedImage/TYPE_3BYTE_BGR) [GL_RGB GL_RGB GL_UNSIGNED_BYTE]
-          (= image-type java.awt.image.BufferedImage/TYPE_4BYTE_ABGR) [GL_RGBA8 GL_RGBA GL_UNSIGNED_BYTE] ;this gets triggered
-          (= image-type java.awt.image.BufferedImage/TYPE_4BYTE_ABGR_PRE) [GL_RGBA GL_RGBA GL_UNSIGNED_BYTE]
-          (= image-type java.awt.image.BufferedImage/TYPE_BYTE_BINARY) [GL_RED GL_RED GL_UNSIGNED_BYTE]
-          (= image-type java.awt.image.BufferedImage/TYPE_BYTE_GRAY) [GL_RED GL_RED GL_UNSIGNED_BYTE]
+        [internal-format img-format read-type load-fn] (cond 
+          (= image-type java.awt.image.BufferedImage/TYPE_3BYTE_BGR) [GL_BGR GL_RGB GL_UNSIGNED_BYTE 
+                                                                      (fn [byte-buf data] 
+                                                                       (println "3bgr")
+                                                                        (map (fn [[b g r]] 
+                                                                               (.put byte-buf r) 
+                                                                               (.put byte-buf g) 
+                                                                               (.put byte-buf b) 
+                                                                               (.put byte-buf (unchecked-byte 0xFF))) 
+                                                                             (partition 3 3 data)))]
+          (= image-type java.awt.image.BufferedImage/TYPE_4BYTE_ABGR) [GL_RGBA8 GL_RGBA GL_UNSIGNED_BYTE
+                                                                       (fn [byte-buf data] 
+                                                                       (println "4abgr")
+                                                                        (map (fn [[a b g r]] 
+                                                                               (.put byte-buf r) 
+                                                                               (.put byte-buf g) 
+                                                                               (.put byte-buf b) 
+                                                                               (.put byte-buf a)) 
+                                                                             (partition 4 4 data)))]
+          (= image-type java.awt.image.BufferedImage/TYPE_4BYTE_ABGR_PRE) [GL_RGBA8 GL_RGBA GL_UNSIGNED_BYTE
+                                                                           (fn [byte-buf data] 
+                                                                           (println "4abgr-pre")
+                                                                            (map (fn [[a b g r]] 
+                                                                                   (.put byte-buf r) 
+                                                                                   (.put byte-buf g) 
+                                                                                   (.put byte-buf b) 
+                                                                                   (.put byte-buf a)) 
+                                                                                 (partition 4 4 data)))]
+          (= image-type java.awt.image.BufferedImage/TYPE_BYTE_BINARY) [GL_RED GL_RED GL_UNSIGNED_BYTE
+                                                                        (fn [byte-buf data] 
+                                                                           (println "println red")
+                                                                          (map (fn [d] 
+                                                                                 (.put byte-buf (unchecked-byte 
+                                                                                                  (+ d (unchecked-byte 0xFF)))) 
+                                                                                 (.put byte-buf (unchecked-byte 
+                                                                                                  (+ d (unchecked-byte 0xFF)))) 
+                                                                                 (.put byte-buf (unchecked-byte 
+                                                                                                  (+ d (unchecked-byte 0xFF)))) 
+                                                                                 (.put byte-buf (unchecked-byte 0xFF)))
+                                                                               data))]
+          (= image-type java.awt.image.BufferedImage/TYPE_BYTE_GRAY) [GL_RED GL_RED GL_UNSIGNED_BYTE
+                                                                      (fn [byte-buf data] 
+                                                                        (map (fn [d] 
+                                                                               (.put byte-buf d) 
+                                                                               (.put byte-buf d) 
+                                                                               (.put byte-buf d) 
+                                                                               (.put byte-buf (unchecked-byte 0xFF)))
+                                                                             data))]
           (= image-type java.awt.image.BufferedImage/TYPE_BYTE_INDEXED) 
             (throw (IllegalArgumentException. (str "Image Type BYTE_INDEXED not supported")))
-          (= image-type java.awt.image.BufferedImage/TYPE_INT_ARGB) [GL_RGBA GL_RGBA GL_INT]
-          (= image-type java.awt.image.BufferedImage/TYPE_INT_ARGB_PRE) [GL_RGBA GL_RGBA GL_INT]
-          (= image-type java.awt.image.BufferedImage/TYPE_INT_BGR) [GL_RGB GL_RGB GL_INT]
+          (= image-type java.awt.image.BufferedImage/TYPE_INT_ARGB) [GL_RGBA GL_RGBA GL_INT
+                                                                     (fn [byte-buf data] 
+                                                                       (println "yeah")
+                                                                        (map (fn [d] 
+                                                                               (.put byte-buf (unchecked-byte
+                                                                                                (unsigned-bit-shift-right 
+                                                                                                (bit-shift-left 0xAABBCCDD 56) 56))) 
+                                                                               (.put byte-buf (unchecked-byte
+                                                                                                (unsigned-bit-shift-right 
+                                                                                                (bit-shift-left 0xAABBCCDD 48) 56)))
+                                                                               (.put byte-buf (unchecked-byte
+                                                                                                (unsigned-bit-shift-right 
+                                                                                                (bit-shift-left 0xAABBCCDD 40) 56)))
+                                                                               (.put byte-buf (unchecked-byte
+                                                                                                (unsigned-bit-shift-right 
+                                                                                                (bit-shift-left 0xAABBCCDD 32) 56)))) 
+                                                                             data))]
+          (= image-type java.awt.image.BufferedImage/TYPE_INT_ARGB_PRE) [GL_RGBA GL_RGBA GL_INT
+                                                                         (fn [byte-buf data] 
+                                                                           (map 
+                                                                             (fn [d] 
+                                                                               (.put byte-buf (unchecked-byte
+                                                                                                (unsigned-bit-shift-right 
+                                                                                                (bit-shift-left 0xAABBCCDD 56) 56))) 
+                                                                               (.put byte-buf (unchecked-byte
+                                                                                                (unsigned-bit-shift-right 
+                                                                                                (bit-shift-left 0xAABBCCDD 48) 56)))
+                                                                               (.put byte-buf (unchecked-byte
+                                                                                                (unsigned-bit-shift-right 
+                                                                                                (bit-shift-left 0xAABBCCDD 40) 56)))
+                                                                               (.put byte-buf (unchecked-byte
+                                                                                                (unsigned-bit-shift-right 
+                                                                                                (bit-shift-left 0xAABBCCDD 32) 56)))) 
+                                                                             data))]
+          (= image-type java.awt.image.BufferedImage/TYPE_INT_BGR) [GL_RGB GL_RGB GL_INT
+                                                                    (fn [byte-buf data] 
+                                                                      (map 
+                                                                        (fn [d] 
+                                                                          (.put byte-buf (unchecked-byte
+                                                                                           (unsigned-bit-shift-right 
+                                                                                           (bit-shift-left 0xAABBCCDD 56) 56))) 
+                                                                          (.put byte-buf (unchecked-byte
+                                                                                           (unsigned-bit-shift-right 
+                                                                                           (bit-shift-left 0xAABBCCDD 48) 56)))
+                                                                          (.put byte-buf (unchecked-byte
+                                                                                           (unsigned-bit-shift-right 
+                                                                                           (bit-shift-left 0xAABBCCDD 40) 56)))
+                                                                          (.put byte-buf (unchecked-byte 0xFF))) 
+                                                                        data))]
           (= image-type java.awt.image.BufferedImage/TYPE_USHORT_555_RGB) 
             (throw (IllegalArgumentException. (str "Image Type USHORT_555_RGB not supported")))
-          (= image-type java.awt.image.BufferedImage/TYPE_USHORT_565_RGB) [GL_RGB GL_RGB GL_UNSIGNED_SHORT_5_6_5]
+          (= image-type java.awt.image.BufferedImage/TYPE_USHORT_565_RGB) 
+            (throw (IllegalArgumentException. (str "Image Type USHORT_565_RGB not supported")))
           (= image-type java.awt.image.BufferedImage/TYPE_USHORT_GRAY) [GL_RED GL_RED GL_UNSIGNED_SHORT]
           :default (throw (IllegalArgumentException. (str "Image Type " image-type " not supported"))))
         nImageWidth (.getWidth img)
         nImageHeight (.getHeight img)
         databuf (.getDataBuffer (.getRaster img)) ;databuffer still on host side
-        pixeldata (.getData databuf) ;is some type of primitive array depending on the exakt type of databuf
-        ;ironically, the only case we are screwed here is, when pixeldata is a byte-array
-        texImage-data (if (= byte-array-type (type pixeldata))
-                        (java.nio.ByteBuffer/wrap pixeldata)
-                        pixeldata)
-        _ (.flip texImage-data)
-        texid (glGenTextures)
-        _ (glEnable GL_TEXTURE_2D)
-        _ (glBindTexture GL_TEXTURE_2D texid)
-        _ (println "pixeldata type: " (type pixeldata))
-        _ (println "pixeldata size: " (count pixeldata))
-        _ (println "pixeldata size should be: " (* 256 256 4))
-        _ (println (format "errorcode:%d\n internal-format:%d\n nImageWidth:%d\n nImageHeight:%d\n img-format:%d\n read-type:%d\n" 
-                           (glGetError) internal-format nImageWidth nImageHeight img-format read-type))
-        _ (pp (Thread/currentThread))
+        pixeldata (.getData databuf) ;is some type of primitive array depending on the exact type of databuf
+
+        _ (println (format "width: %d, height:%d, path:%s" nImageWidth nImageHeight path))
+        texid (with-glGetError (glGenTextures))
+        _ (with-glGetError (glEnable GL_TEXTURE_2D)) ; how can this throw an error???
+        _ (with-glGetError (glBindTexture GL_TEXTURE_2D texid))
+
         ex-bb (org.lwjgl.BufferUtils/createByteBuffer (* nImageWidth nImageHeight 4)) 
-        _ (doall (map (fn [elem] (.put ex-bb elem)) pixeldata))
+        _ (load-fn ex-bb pixeldata)
         _ (.flip ex-bb)
-        ;_ (throw (NullPointerException. "Safety Aaahaahaha"))
-        ;_ (with-glGetError (glTexImage2D GL_TEXTURE_2D 0 GL_RGBA8 256 256 0 GL_RGBA GL_UNSIGNED_BYTE ex-bb))
-        _ (with-glGetError (glTexImage2D GL_TEXTURE_2D 0 internal-format nImageWidth nImageHeight 0 img-format read-type ex-bb))
+        _ (println "oh no where does this come from? " (glGetError))
+        _ (with-glGetError (glTexImage2D GL_TEXTURE_2D 0 GL_RGBA8 nImageWidth nImageHeight 0 GL_RGBA GL_UNSIGNED_BYTE ex-bb))
         _ (with-glGetError (glGenerateMipmap GL_TEXTURE_2D))
         _ (with-glGetError (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S GL_CLAMP_TO_EDGE))
         _ (with-glGetError (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T GL_CLAMP_TO_EDGE))
@@ -1431,7 +1511,8 @@ new-pipe (assoc-in
         buf-obj-id (glGenBuffers)
         _ (glBindBuffer GL_ARRAY_BUFFER buf-obj-id)
         _ (glBufferData GL_ARRAY_BUFFER host-buf GL_STATIC_DRAW)
-        _ (glBindBuffer GL_ARRAY_BUFFER 0)]
+        _ (glBindBuffer GL_ARRAY_BUFFER 0)
+        ]
     buf-obj-id))
 
 ;state-change fns:
