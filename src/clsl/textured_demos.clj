@@ -7,23 +7,37 @@
 
 (def positions
   ;X    Y    Z    W
-  [0.0  0.5  0.0  1.0   ; 1. Vertex
+  [0.5  0.5  0.0  1.0   ; 1. Vertex
   -0.5 -0.5  0.0  1.0   ; 2. Vertex
-   0.5 -0.5  0.0  1.0]) ; 3. Vertex 
+   0.5 -0.5  0.0  1.0   ; 3. Vertex 
+   
+   0.5  0.5  0.0  1.0   ; 1. Vertex
+  -0.5 -0.5  0.0  1.0   ; 2. Vertex
+   -0.5 0.5  0.0  1.0   ; 3. Vertex 
+   ]) 
   
 (def colors
   ;R   G   B   A
   [1.0 0.0 0.0 1.0
    0.0 1.0 0.0 1.0
+   0.0 0.0 1.0 1.0
+   
+   1.0 0.0 0.0 1.0
+   0.0 1.0 0.0 1.0
    0.0 0.0 1.0 1.0])
 
 (def uv-coordinates
-  [0 0
+  [1 1
+   0 0
+   1 0
+   
+   1 1
+   0 0
    0 1
-   1 1])
+   ])
 
 (def interleaved-data-2
-  (vec (flatten (interleave 
+  (vec (flatten (interleave
                   (partition 4 4 positions)
                   (partition 4 4 colors)
                   (partition 2 2 uv-coordinates)))))
@@ -36,11 +50,11 @@
 
 (def texture-frag-shader
   (c/fragment-shader [color texture1 uv factor]
-    (c/add (c/mul factor (c/sample texture1 uv))
-           (c/mul (c/sub 1 factor) color))))
+    (c/add (c/mul factor (c/swizzle (c/sample texture1 uv) :wzyx))
+           (c/mul (c/sub 1.0 factor) color))))
 
 (def texture-render-pipeline
-  (let [vert-out (c/shader-output texture-vert-shader)] ;vert-out = [:color :texture_coords]
+  (let [vert-out (c/shader-output texture-vert-shader)]
     (c/simple-pipeline [pos cool_texture uv_coords color mvp blend]
       [(c/prime-shader 
          texture-vert-shader pos uv_coords mvp color) 
@@ -55,22 +69,22 @@
     texture-render-pipeline 
     [(c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4 :vec2) 0)
      (c/texture-2d-take my-texture)
-     (c/buf-take tr-buf :vec2 (c/size-of-type :vec4 :vec4 :vec2) (c/size-of-type :vec4))
-     (c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4 :vec2) (c/size-of-type :vec4 :vec2))
+     (c/buf-take tr-buf :vec2 (c/size-of-type :vec4 :vec4 :vec2) (c/size-of-type :vec4 :vec4))
+     (c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4 :vec2) (c/size-of-type :vec4))
      (let [adjusted_t (* t 0.001)] 
        (glm.mat4x4.Mat4.
         (*  2.0 (Math/cos adjusted_t))  (* 1.0 (Math/sin adjusted_t)) 0.0 0.0
         (* -1.0 (Math/sin adjusted_t))  (* 2.0 (Math/cos adjusted_t)) 0.0 0.0
         0.0                             0.0                           1.0 0.0
         0.0                             0.0                           0.0 1.0))
-     (Math/abs (Math/sin t))]
+     0.5]
     (c/drawarrays :triangles 0 tr-buf-count)))
 
 (defn my-state-init-fn [state]
   (assoc state
          :objs {:tr-buf (c/buf (c/load-value-to-array interleaved-data-2))
                 :tex-id (c/texture-2d "/home/wiredaemon/Pictures/test.png")
-                :tr-buf-count 3}
+                :tr-buf-count 6}
          :start-time (System/currentTimeMillis)
          :time 0)) 
 
@@ -82,6 +96,7 @@
   "Demo completed. Global State has been reset!")
 
 (comment 
+  (clojure.pprint/pprint (partition 10 10 interleaved-data-2))
   "evaluating the expression below may show you textured triangles" 
   (demo)
   )

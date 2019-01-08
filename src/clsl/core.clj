@@ -419,6 +419,12 @@
    :sampler sampler
    :texcoords texcoords})
 
+(defn swizzle [elem swizzle-str]
+  {:type :fn
+   :name "swizzle"
+   :elem elem
+   :swizzle-str swizzle-str})
+
 (def qualifiers
   #{:in :uniform :out})
 
@@ -769,6 +775,8 @@ just extend the protocol to your liking"
 (defmethod to-primitives "div" [arg]
   (update arg :args to-primitives))
 
+(defmethod to-primitives "swizzle" [arg]
+  (update arg :elem to-primitives))
 
 (defmethod to-primitives "vertex-shader" [arg]
   (assoc arg
@@ -1157,6 +1165,9 @@ new-pipe (assoc-in
 
 (defmethod emit-form "mul" [arg]
   (clojure.string/join " * " (map #(str "(" (emit %) ")") (:args arg))))
+
+(defmethod emit-form "swizzle" [arg]
+  (str "(" (emit (:elem arg)) ")." (name (:swizzle-str arg))))
 
 (defmethod emit-form "sample" [arg]
   (str "texture(" (emit (:sampler arg)) ", " (emit (:texcoords arg)) ")" ))
