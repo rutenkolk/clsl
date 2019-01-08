@@ -50,7 +50,7 @@
 
 (def texture-frag-shader
   (c/fragment-shader [color texture1 uv factor]
-    (c/add (c/mul factor (c/swizzle (c/sample texture1 uv) :wzyx))
+    (c/add (c/mul factor (c/sample texture1 uv))
            (c/mul (c/sub 1.0 factor) color))))
 
 (def texture-render-pipeline
