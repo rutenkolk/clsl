@@ -1004,22 +1004,16 @@ init-fn (fn [drawer] ;here is the nullpointer! argh TODO
                        ;extra offset to buf
                        (:offset (nth i-in-fill i)))))]
                (assoc drawer :vao vao-id)))
-
 exec-fn (let 
-          [_ (println "--- exec-fn ---")
-           _ (println "uniform calls iterating over:")
-           _ (pp (for [i (range (count (filter #(= :uniform %) i-face-modifiers))) :when (not (= :sampler2D (:type (nth all-uniform-variables i))))]
-                   (nth all-uniform-variables i)))
-           uniform-calls (for [i (range (count (filter #(= :uniform %) i-face-modifiers)))
+          [uniform-calls (for [i (range (count (filter #(= :uniform %) i-face-modifiers)))
                                :when (not (= :sampler2D (:type (nth all-uniform-variables i))))] 
                            (let [i-var (nth all-uniform-variables i)] 
                              (partial 
                                (uniform-fn-for-glsl-type (:type i-var))
                                (:layout i-var))))
-           index-map (vec (map second (filter #(= (first %) :uniform) 
-                                  (partition 2 2 
-                                     (interleave i-face-modifiers 
-                                                 (range (count i-face-modifiers)))))))
+           index-map (vec (map (comp second rest) 
+                               (filter #(and (= (first %) :uniform) (not (= (second %) :sampler2D))) 
+                                       (partition 3 3 (interleave i-face-modifiers i-face-types (range))))))
            uniform-calls-data (for [i (range (count 
                                        (filter #(= :uniform %) i-face-modifiers)))] 
                            (let [i-var (nth all-uniform-variables i)] 
@@ -1027,12 +1021,13 @@ exec-fn (let
                              ))]
             (fn [drawer latest-state]
               (let [uniform-values ((:interface-fill arg) latest-state)]
-;                (println "--- calling exec-fn ---")
-;                (pp uniform-values)
-;                (pp uniform-calls)
-;                (pp (map-indexed #(vector %2 (load-value-to-array 
-;                                      (nth uniform-values (index-map %1)))) 
-;                               uniform-calls))
+                ;(println "--- calling exec-fn ---")
+                ;(println "uniform-values")
+                ;(pp uniform-values)
+                ;(println "uniform-calls")
+                ;(pp uniform-calls)
+                ;(println "index-map")
+                ;(pp index-map)
                 (glUseProgram (:program drawer))
                 (glBindVertexArray (:vao drawer))
                 ;TODO: bind textures etc..
