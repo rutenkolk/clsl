@@ -61,9 +61,9 @@
        (c/prime-shader 
          texture-frag-shader (first vert-out) cool_texture (second vert-out) blend)])))
 
-(def texture-triangle-drawer
+(defn create-texture-triangle-drawer [texture-id-lookup [offx offy]]
   (c/drawer [tr-buf [:objs :tr-buf]
-             my-texture [:objs :tex-id]
+             my-texture [:objs texture-id-lookup]
              tr-buf-count [:objs :tr-buf-count]
              t [:time]]
     texture-render-pipeline 
@@ -72,24 +72,28 @@
      (c/buf-take tr-buf :vec2 (c/size-of-type :vec4 :vec4 :vec2) (c/size-of-type :vec4 :vec4))
      (c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4 :vec2) (c/size-of-type :vec4))
      (let [adjusted_t (* t 0.001)] 
-       (glm.mat4x4.Mat4.
-        (*  2.0 (Math/cos adjusted_t))  (* 1.0 (Math/sin adjusted_t)) 0.0 0.0
-        (* -1.0 (Math/sin adjusted_t))  (* 2.0 (Math/cos adjusted_t)) 0.0 0.0
-        0.0                             0.0                           1.0 0.0
-        0.0                             0.0                           0.0 1.0))
-     0.5]
+       (.times
+         (glm.mat4x4.Mat4.
+          (*  2.0 (Math/cos adjusted_t))  (* 1.0 (Math/sin adjusted_t)) 0.0 0.0
+          (* -1.0 (Math/sin adjusted_t))  (* 2.0 (Math/cos adjusted_t)) 0.0 0.0
+          0.0                             0.0                           1.0 0.0
+          0.0                             0.0                           0.0 1.0)
+         (.translate glm.glm/INSTANCE (glm.mat4x4.Mat4. 1) (glm.vec3.Vec3. offx offy 0))))
+     (+ 0.5 (/ (Math/sin (* t 0.001)) 2))]
     (c/drawarrays :triangles 0 tr-buf-count)))
 
 (defn my-state-init-fn [state]
   (assoc state
          :objs {:tr-buf (c/buf (c/load-value-to-array interleaved-data-2))
-                :tex-id (c/texture-2d "/home/wiredaemon/Pictures/test.png")
+                :tex-id-1 (c/texture-2d "res/birb1.jpg")
+                :tex-id-2 (c/texture-2d "res/birb2.jpg")
                 :tr-buf-count 6}
          :start-time (System/currentTimeMillis)
          :time 0)) 
 
 (defn demo []
-  (c/add-drawer! texture-triangle-drawer)
+  (c/add-drawer! (create-texture-triangle-drawer :tex-id-1 [-0.5 0.0]))
+  (c/add-drawer! (create-texture-triangle-drawer :tex-id-2 [0.5 0.0]))
   (c/add-update-fn! (fn [state] (assoc state :time (- (System/currentTimeMillis) (:start-time state)))))
   (c/start! my-state-init-fn)
   (c/reset-global-state!)
