@@ -61,7 +61,7 @@
        (c/prime-shader 
          texture-frag-shader (first vert-out) cool_texture (second vert-out) blend)])))
 
-(defn create-texture-triangle-drawer [texture-id-lookup [offx offy]]
+(defn create-texture-quad-drawer [texture-id-lookup [offx offy]]
   (c/drawer [tr-buf [:objs :tr-buf]
              my-texture [:objs texture-id-lookup]
              tr-buf-count [:objs :tr-buf-count]
@@ -88,8 +88,8 @@
          :time 0)) 
 
 (defn demo []
-  (c/add-drawer! (create-texture-triangle-drawer :tex-id-1 [-0.5 0.0]))
-  (c/add-drawer! (create-texture-triangle-drawer :tex-id-2 [0.5 0.0]))
+  (c/add-drawer! (create-texture-quad-drawer :tex-id-1 [-0.5 0.0]))
+  (c/add-drawer! (create-texture-quad-drawer :tex-id-2 [0.5 0.0]))
   (c/add-update-fn! (fn [state] (assoc state :time (- (System/currentTimeMillis) (:start-time state)))))
   (c/start! my-state-init-fn)
   (c/reset-global-state!)
