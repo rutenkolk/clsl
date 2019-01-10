@@ -320,6 +320,59 @@
    :name "mul"
    :args args})
 
+(defn pow [n exp]
+  {:type :fn
+   :name "pow"
+   :n n
+   :exp exp})
+
+(defn refract
+"For a given incident vector I, surface normal N and ratio of indices of refraction, eta, refract returns the refraction vector, R.
+
+R is calculated as:
+
+    k = 1.0 - eta * eta * (1.0 - dot(N, I) * dot(N, I));
+    if (k < 0.0)
+        R = genType(0.0);       // or genDType(0.0)
+    else
+        R = eta * I - (eta * dot(N, I) + sqrt(k)) * N;
+
+The input parameters I and N should be normalized in order to achieve the desired result. " 
+  [i n eta]
+  {:type :fn
+   :name "refract"
+   :i i
+   :n n
+   :eta eta})
+
+(defn dot 
+  "dot returns the dot product of two vectors, x and y. i.e., x[0]⋅y[0]+x[1]⋅y[1]+..."
+  [x y]
+  {:type :fn
+   :name "dot"
+   :x x
+   :y y})
+
+(defn max [& args]
+  {:type :fn
+   :name "max"
+   :args args})
+
+(defn normalize [arg]
+  {:type :fn
+   :name "normalize"
+   :arg arg})
+
+(defn reflect 
+"For a given incident vector I and surface normal N reflect returns the reflection direction calculated as I - 2.0 * dot(N, I) * N.
+
+N should be normalized in order to achieve the desired result. "
+  [i n]
+  {:type :fn
+   :name "reflect"
+   :i i
+   :n n})
+
 (defn reduce' [reduce-fn coll]
   {:type :fn
    :name "reduce"
