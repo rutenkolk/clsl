@@ -951,10 +951,6 @@ f-shader-uniforms (filter (fn [elem] (= :uniform (:qualifier elem)))
                           (map second new-f-shader-nout-vardecs))
 all-uniform-variables (concat v-shader-uniforms f-shader-uniforms)
 
-blubbs (filter (fn [[var-name _]] (some #{var-name} (map 
-                                                      (comp keyword eval :name) 
-                                                      v-shader-uniforms))) 
-        (partition 2 2 (interleave v-shader-bound-vars (map #(* 2 %) (range)))))
 uniform-var-tuples 
 (group-by 
         first 
