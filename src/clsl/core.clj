@@ -1338,7 +1338,8 @@ new-pipe (assoc-in
         _ (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER GL_LINEAR)
         _ (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER GL_LINEAR_MIPMAP_LINEAR)
         fLargest (glGetFloat org.lwjgl.opengl.EXTTextureFilterAnisotropic/GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT)
-        _ (glTexParameterf GL_TEXTURE_2D org.lwjgl.opengl.EXTTextureFilterAnisotropic/GL_TEXTURE_MAX_ANISOTROPY_EXT fLargest)]
+        _ (glTexParameterf GL_TEXTURE_2D org.lwjgl.opengl.EXTTextureFilterAnisotropic/GL_TEXTURE_MAX_ANISOTROPY_EXT fLargest)
+        _ (org.lwjgl.stb.STBImage/stbi_image_free stbi-buf)]
     texid))
 
 (defn buf [coll]
