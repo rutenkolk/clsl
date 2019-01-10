@@ -13,7 +13,7 @@
    
    0.5  0.5  0.0  1.0   ; 1. Vertex
   -0.5 -0.5  0.0  1.0   ; 2. Vertex
-   -0.5 0.5  0.0  1.0   ; 3. Vertex 
+  -0.5  0.5  0.0  1.0   ; 3. Vertex 
    ]) 
   
 (def colors
@@ -73,11 +73,7 @@
      (c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4 :vec2) (c/size-of-type :vec4))
      (let [adjusted_t (* t 0.001)] 
        (.times
-         (glm.mat4x4.Mat4.
-          (*  2.0 (Math/cos adjusted_t))  (* 1.0 (Math/sin adjusted_t)) 0.0 0.0
-          (* -1.0 (Math/sin adjusted_t))  (* 2.0 (Math/cos adjusted_t)) 0.0 0.0
-          0.0                             0.0                           1.0 0.0
-          0.0                             0.0                           0.0 1.0)
+         (.rotate glm.glm/INSTANCE (glm.mat4x4.Mat4. 1) adjusted_t (glm.vec3.Vec3. 0 0 -1))
          (.translate glm.glm/INSTANCE (glm.mat4x4.Mat4. 1) (glm.vec3.Vec3. offx offy 0))))
      (+ 0.5 (/ (Math/sin (* t 0.001)) 2))]
     (c/drawarrays :triangles 0 tr-buf-count)))
