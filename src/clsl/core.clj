@@ -326,6 +326,21 @@
    :n n
    :exp exp})
 
+(defn vec2 [& args]
+  {:type :fn
+   :name "vec2"
+   :args args})
+
+(defn vec3 [& args]
+  {:type :fn
+   :name "vec3"
+   :args args})
+
+(defn vec4 [& args]
+  {:type :fn
+   :name "vec4"
+   :args args})
+
 (defn refract
 "For a given incident vector I, surface normal N and ratio of indices of refraction, eta, refract returns the refraction vector, R.
 
@@ -831,6 +846,28 @@ just extend the protocol to your liking"
 (defmethod to-primitives "swizzle" [arg]
   (update arg :elem to-primitives))
 
+(defmethod to-primitives "refract" [arg]
+  (assoc arg
+         :i (to-primitives (:i arg))
+         :n (to-primitives (:n arg))
+         :eta (to-primitives (:eta arg))))
+
+(defmethod to-primitives "dot" [arg]
+  (assoc arg
+         :x (to-primitives (:x arg))
+         :y (to-primitives (:y arg))))
+
+(defmethod to-primitives "max" [arg]
+  (update arg :args to-primitives))
+
+(defmethod to-primitives "normalize" [arg]
+  (update arg :arg to-primitives))
+
+(defmethod to-primitives "reflect" [arg]
+  (assoc arg
+         :i (to-primitives (:i arg))
+         :n (to-primitives (:n arg))))
+
 (defmethod to-primitives "vertex-shader" [arg]
   (assoc arg
          :vardecs (vec
@@ -1193,8 +1230,60 @@ new-pipe (assoc-in
 (defmethod emit-form "mul" [arg]
   (clojure.string/join " * " (map #(str "(" (emit %) ")") (:args arg))))
 
+(defmethod emit-form "vec2" [arg]
+  (str "vec2(" 
+       (clojure.string/join 
+         "," (map #(str "(" (emit %) ")") (:args arg)))
+       ")"))
+
+(defmethod emit-form "vec3" [arg]
+  (str "vec3(" 
+       (clojure.string/join 
+         "," (map #(str "(" (emit %) ")") (:args arg)))
+       ")"))
+
+(defmethod emit-form "vec4" [arg]
+  (str "vec4(" 
+       (clojure.string/join 
+         "," (map #(str "(" (emit %) ")") (:args arg)))
+       ")"))
+
 (defmethod emit-form "swizzle" [arg]
   (str "(" (emit (:elem arg)) ")." (name (:swizzle-str arg))))
+
+(defmethod emit-form "refract" [arg]
+  (str "refract(" 
+       (emit (:i arg)) "," 
+       (emit (:n arg)) ","
+       (emit (:eta arg))")"))
+
+(defmethod emit-form "dot" [arg]
+  (str "dot(" 
+       (emit (:x arg)) "," 
+       (emit (:y arg)) ")"))
+(defn- create-max-tuples [coll]
+  (let [res (map 
+              (fn [[a b]] 
+                (str "max(" (emit a) "," (emit b) ")")) 
+              (partition 2 2 coll))] 
+    (if (= 0 (mod (count coll) 2)) 
+      res 
+      (conj res (last coll)))))
+(defn- max-emit [coll] 
+  (if (= (count coll) 1)
+    coll
+    (recur (create-max-tuples coll))))
+
+(defmethod emit-form "max" [arg]
+  (max-emit (:args arg)))
+
+(defmethod emit-form "normalize" [arg]
+  (str "normalize(" (emit (:arg arg)) ")"))
+
+(defmethod emit-form "reflect" [arg]
+  (str "reflect(" 
+       (emit (:i arg)) "," 
+       (emit (:n arg)) ")"))
 
 (defmethod emit-form "sample" [arg]
   (str "texture(" (emit (:sampler arg)) ", " (emit (:texcoords arg)) ")" ))
@@ -1395,41 +1484,48 @@ new-pipe (assoc-in
         _ (org.lwjgl.stb.STBImage/stbi_image_free stbi-buf)]
     texid))
 
-(defn buf [coll]
-  (let [coll-t (type coll)
-        host-buf (cond
-                   (= coll-t float-array-type)
-                     (-> (BufferUtils/createFloatBuffer (count coll))
-                       (.put coll)
-                       (.flip))
-                   (= coll-t int-array-type)
-                     (-> (BufferUtils/createIntBuffer (count coll))
-                       (.put coll)
-                       (.flip))
-                   (= coll-t byte-array-type)
-                     (-> (BufferUtils/createByteBuffer (count coll))
-                       (.put coll)
-                       (.flip))
-                   (= coll-t double-array-type)
-                     (-> (BufferUtils/createDoubleBuffer (count coll))
-                       (.put coll)
-                       (.flip))
-                   (= coll-t short-array-type)
-                     (-> (BufferUtils/createShortBuffer (count coll))
-                       (.put coll)
-                       (.flip))
-                   :auieee (throw 
-                             (IllegalArgumentException. 
-                               (str "Wrong type to create buffer. 
-                                    Must be native array of 
-                                    bytes,ints,shorts,floats or doubles.
-                                    Type was:" coll-t))))
-        buf-obj-id (glGenBuffers)
-        _ (glBindBuffer GL_ARRAY_BUFFER buf-obj-id)
-        _ (glBufferData GL_ARRAY_BUFFER host-buf GL_STATIC_DRAW)
-        _ (glBindBuffer GL_ARRAY_BUFFER 0)
-        ]
-    buf-obj-id))
+(defn buf 
+  ([coll]
+    (let [coll-t (type coll)
+          host-buf (cond
+                     (= coll-t float-array-type)
+                       (-> (BufferUtils/createFloatBuffer (count coll))
+                         (.put coll)
+                         (.flip))
+                     (= coll-t int-array-type)
+                       (-> (BufferUtils/createIntBuffer (count coll))
+                         (.put coll)
+                         (.flip))
+                     (= coll-t byte-array-type)
+                       (-> (BufferUtils/createByteBuffer (count coll))
+                         (.put coll)
+                         (.flip))
+                     (= coll-t double-array-type)
+                       (-> (BufferUtils/createDoubleBuffer (count coll))
+                         (.put coll)
+                         (.flip))
+                     (= coll-t short-array-type)
+                       (-> (BufferUtils/createShortBuffer (count coll))
+                         (.put coll)
+                         (.flip))
+                     :auieee (throw 
+                               (IllegalArgumentException. 
+                                 (str "Wrong type to create buffer. 
+                                      Must be native array of 
+                                      bytes,ints,shorts,floats or doubles.
+                                      Type was:" coll-t))))
+          buf-obj-id (glGenBuffers)
+          _ (glBindBuffer GL_ARRAY_BUFFER buf-obj-id)
+          _ (glBufferData GL_ARRAY_BUFFER host-buf GL_STATIC_DRAW)
+          _ (glBindBuffer GL_ARRAY_BUFFER 0)
+          ]
+      buf-obj-id))
+  ([size address] 
+    (let [buf-obj-id (glGenBuffers)
+          _ (glBindBuffer GL_ARRAY_BUFFER buf-obj-id)
+          _ (nglBufferData GL_ARRAY_BUFFER size address GL_STATIC_DRAW)
+          _ (glBindBuffer GL_ARRAY_BUFFER 0)]
+      buf-obj-id)))
 
 ;state-change fns:
 (defn use-shader! [shadername state]

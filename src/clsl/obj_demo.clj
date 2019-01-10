@@ -35,6 +35,40 @@
                                uSpecularColor)]
       (c/vec4 (c/add ambientColor diffuseColor specularColor) 1.0))))
 
+(def obj-render-pipeline
+  (let [vert-out (c/shader-output obj-vert-shader)]
+    (c/simple-pipeline [aVertex aNormal uModelMatrix uViewProjectionMatrix 
+                        uNormalMatrix uLightPosition uViewPosition uAmbientColor
+                        uDiffuseColor uSpecularColor]
+      [(c/prime-shader obj-vert-shader 
+         aVertex aNormal uModelMatrix uViewProjectionMatrix uNormalMatrix) 
+       (c/prime-shader obj-frag-shader 
+         uLightPosition uViewPosition uAmbientColor uDiffuseColor uSpecularColor 
+         (first vert-out) (second vert-out))])))
+
+(defn create obj-drawer
+  (c/drawer [tr-buf [:objs :tr-buf]
+             my-texture [:objs texture-id-lookup]
+             tr-buf-count [:objs :tr-buf-count]
+             t [:time]]
+    obj-render-pipeline
+    []
+    (c/drawarrays :triangles 0 tr-buf-count)))
+(defn load-obj-model [path]
+   (let [path "res/magnet.obj"
+         scene (org.lwjgl.assimp.Assimp/aiImportFile 
+                 path 
+                 (bit-or org.lwjgl.assimp.Assimp/aiProcess_JoinIdenticalVertices 
+                         org.lwjgl.assimp.Assimp/aiProcess_Triangulate))
+         _ (println "is scene nil?" (nil? scene))
+         _ (clojure.pprint/pprint scene)
+         _ (println "Assimp error String:" (org.lwjgl.assimp.Assimp/aiGetErrorString))
+         meshcount (.mNumMeshes scene)
+         ai-meshes (map #(org.lwjgl.assimp.AIMesh/create %) (.mMeshes scene))
+        ;TODO: port Mesh constructor
+         _ (org.lwjgl.assimp.Assimp/aiReleaseImport scene)]
+     )
+  )
 (comment
    (let [path "res/magnet.obj"
          scene (org.lwjgl.assimp.Assimp/aiImportFile 
