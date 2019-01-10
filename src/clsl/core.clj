@@ -905,7 +905,6 @@ frag-nouts (map (fn [[sym decl]]
                                   :uniform))]) 
               frag-nouts-raw)
 f-shader-bound-vars-layout-map (zipmap f-shader-bound-vars (map #(inc (* 2 %)) (range)))
-;wtf (apply concat (map (fn [varname] (filter #(= varname (first %)) inputs)) v-shader-bound-vars))
 new-v-shader-nout-vardecs (map-indexed (fn [index varname]
                           (let [[kwname kwtype kwmod] 
                                 (apply concat (filter #(= varname (first %)) 
@@ -946,18 +945,34 @@ new-f-shader-nout-vardecs (map-indexed (fn [index varname]
 new-f-shader-vardecs (concat
                        new-f-shader-nout-vardecs
                        (map #(list (eval (:name %)) %) frag-outs))
-all-uniform-variables (concat 
-                        (filter (fn [elem] (= :uniform (:qualifier elem)))
+v-shader-uniforms (filter (fn [elem] (= :uniform (:qualifier elem)))
                           (map second new-v-shader-nout-vardecs))
-                        (filter (fn [elem] (= :uniform (:qualifier elem))) 
-                          (map second new-f-shader-nout-vardecs)))
+f-shader-uniforms (filter (fn [elem] (= :uniform (:qualifier elem))) 
+                          (map second new-f-shader-nout-vardecs))
+all-uniform-variables (concat v-shader-uniforms f-shader-uniforms)
+
+blubbs (filter (fn [[var-name _]] (some #{var-name} (map 
+                                                      (comp keyword eval :name) 
+                                                      v-shader-uniforms))) 
+        (partition 2 2 (interleave v-shader-bound-vars (map #(* 2 %) (range)))))
+uniform-var-tuples 
+(group-by 
+        first 
+        (map (fn [[var-name layout]] [var-name layout])
+             (concat 
+               (partition 2 2 (interleave v-shader-bound-vars (map #(* 2 %) (range))))
+               (partition 2 2 (interleave f-shader-bound-vars (map #(inc (* 2 %)) (range)))))))
+uniform-layout-to-interface-index-list 
+(apply concat (map (fn [[v-name ind]] 
+           (map #(vector % ind) (map second (uniform-var-tuples v-name)))) 
+         (map #(vector (first (first %)) (second %)) (filter #(= :uniform (second (rest (first %)))) (partition 2 2 (interleave inputs (range)))))))
 pipe-in-variables (filter (fn [elem] 
                             (= :in (:qualifier elem))) 
                           (map second new-v-shader-nout-vardecs))
 
 interface-init-fill ((:interface-fill arg) init-state)
 
-init-fn (fn [drawer] ;here is the nullpointer! argh TODO
+init-fn (fn [drawer]
              (let[
                vao-id (glGenVertexArrays)
                _ (glBindVertexArray vao-id)
@@ -986,28 +1001,25 @@ init-fn (fn [drawer] ;here is the nullpointer! argh TODO
                        (:offset (nth i-in-fill i)))))]
                (assoc drawer :vao vao-id)))
 exec-fn (let 
-          [uniform-calls (for [i (range (count (filter #(= :uniform %) i-face-modifiers)))
-                               :when (not (= :sampler2D (:type (nth all-uniform-variables i))))] 
-                           (let [i-var (nth all-uniform-variables i)] 
+          [uniform-calls (for [[layout interface-index] 
+                               uniform-layout-to-interface-index-list] 
+                           (let [i-var (first 
+                                         (filter #(= (:layout %) layout) 
+                                                 all-uniform-variables))] 
                              (partial 
                                (uniform-fn-for-glsl-type (:type i-var))
-                               (:layout i-var))))
-           index-map (vec (map (comp second rest) 
-                               (filter #(and (= (first %) :uniform) (not (= (second %) :sampler2D))) 
-                                       (partition 3 3 (interleave i-face-modifiers i-face-types (range))))))
-           uniform-calls-data (for [i (range (count 
-                                       (filter #(= :uniform %) i-face-modifiers)))] 
-                           (let [i-var (nth all-uniform-variables i)] 
-                             i-var
-                             ))]
+                               layout)))
+           index-list (map second uniform-layout-to-interface-index-list)]
             (fn [drawer latest-state]
-              (let [uniform-values ((:interface-fill arg) latest-state)]
+              (let [curr-interface-fill ((:interface-fill arg) latest-state)]
+                (map-indexed #(list %2 (load-value-to-array 
+                                      (nth curr-interface-fill (nth index-list %1)))) 
+                               uniform-calls)
                 (glUseProgram (:program drawer))
                 (glBindVertexArray (:vao drawer))
-                ;TODO: bind textures etc.. Currently this should only work with exactly one texture
                 (doall 
                   (map-indexed #(%2 (load-value-to-array 
-                                      (nth uniform-values (index-map %1)))) 
+                                      (nth curr-interface-fill (nth index-list %1)))) 
                                uniform-calls))
                 ((:drawcmds-fn arg) latest-state))))
 
@@ -1497,7 +1509,7 @@ new-pipe (assoc-in
       res
       )))
 
-(defn init-window! [height width title fullscreen?]
+(defn init-window! [height width title fullscreen? swapinterval]
   (let [errorCallback (GLFWErrorCallback/createPrint System/err)
         _ (glfwSetErrorCallback errorCallback)
         _ (when-not (glfwInit)
@@ -1516,7 +1528,7 @@ new-pipe (assoc-in
         mon_id (if fullscreen? (glfwGetPrimaryMonitor) 0)
         window (glfwCreateWindow monw monh title mon_id 0)
         _ (glfwMakeContextCurrent window)
-        _ (glfwSwapInterval 0)
+        _ (glfwSwapInterval swapinterval)
         _ (if fullscreen? (glfwSetWindowPos window 0 0) 
                           (glfwSetWindowPos window
                             (/  (-  (.width vidmode) width) 2)
@@ -1546,7 +1558,7 @@ new-pipe (assoc-in
   (glClearColor 0.0 0.0 0.0 0.0)
   (glViewport 0 0 width height))
 (defn init! "returns window handle" [] 
-  (init-window! 1000 1000 "beta" false)
+  (init-window! 1000 1000 "beta" false 0)
   (init-gl! 1000 1000)
   (:window @global-state))
 (defn start! 
