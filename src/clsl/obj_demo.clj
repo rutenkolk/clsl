@@ -65,6 +65,16 @@
          _ (println "Assimp error String:" (org.lwjgl.assimp.Assimp/aiGetErrorString))
          meshcount (.mNumMeshes scene)
          ai-meshes (map #(org.lwjgl.assimp.AIMesh/create %) (.mMeshes scene))
+         (for [mesh ai-meshes]
+           (let [vertices-buf (c/buf (* org.lwjgl.assimp.AIVector3D/SIZEOF (.remaining (.vertices mesh))) (.address (.vertices mesh)))
+                 normals-buf (c/buf (* org.lwjgl.assimp.AIVector3D/SIZEOF (.remaining (.normals mesh))) (.address (.normals mesh)))
+                 elem-count (* 3 (.mNumFaces mesh))
+                 elem-host-buf (org.lwjgl.BufferUtils/createIntBuffer elem-count)
+
+                 ])
+           
+
+           )
         ;TODO: port Mesh constructor
          _ (org.lwjgl.assimp.Assimp/aiReleaseImport scene)]
      )
