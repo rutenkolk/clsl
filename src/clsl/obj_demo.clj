@@ -133,9 +133,11 @@
      (:ambient-color (nth materials (:material-index mesh)))
      (:diffuse-color (nth materials (:material-index mesh)))
      (:specular-color (nth materials (:material-index mesh)))]
-    (c/drawelements :triangles 0 tr-buf-count)))
+    (c/draw-elements :triangles 0 tr-buf-count)))
+
 (defn init-fn [state]
   (let [model (load-obj-model "res/magnet.obj")] 
+    (doall (map #(c/add-drawer! (create-obj-drawer %)) (:meshes model)))
     (assoc 
       state
       :objs {:meshes (:meshes model)
@@ -147,13 +149,11 @@
                          1.5 1.5 1.5)
              :normal-mat (.transpose (.inverse (glm.mat3x3.Mat3. model-mat)))
              :view-position [0 0 0]
-             :fov 60}))) 
-(.lookAt glm.glm/INSTANCE 
-         (glm.vec3.Vec3. (* 10 (Math/cos 1)) 10.0 (* 10 (Math/sin 1))) 
-         (glm.vec3.Vec3. 0 0 0) 
-         (glm.vec3.Vec3. 0 1 0))
+             :fov 60})))
+
 (defn update-fn [state]
-  (let [t (* 0.001 (-> state :objs :time))
+  (let [new-t (- (System/currentTimeMillis) (:start-time state)) 
+        t (* 0.001 new-t)
         projection (.perspective glm.glm/INSTANCE 
                                  (Math/toRadians (-> state :objs :fov)) (float (/ (:width state) (:height state)))
                                  0.01
@@ -163,12 +163,20 @@
                           (glm.vec3.Vec3. (* 10 (Math/cos 1)) 10.0 (* 10 (Math/sin 1))) 
                           (glm.vec3.Vec3. 0 0 0) 
                           (glm.vec3.Vec3. 0 1 0))
-        view-projection (.times view-matrix projection)]
+        view-projection (.times view-matrix projection)
+        
+        ]
     (assoc
       state
       :objs {:view-projection-mat view-projection-mat
              :view-mat view-mat
-             :view-position view-position})))
+             :view-position view-position}
+      :time new-t)))
+(defn demo []
+  (c/add-update-fn! update-fn)
+  (c/start! my-state-init-fn)
+  (c/reset-global-state!)
+  "Demo completed. Global State has been reset!")
 (comment
-
+  (demo)
   )

@@ -1461,6 +1461,17 @@ new-pipe (assoc-in
                  (= mode :triangle-strip) GL_TRIANGLE_STRIP)] 
     (glDrawArrays glmode offset n)))
 
+(defn draw-elements
+  "draw n elements from an index-buffer with offset into it. 
+   Supports OpenGLs modes of Interpreting the buffer data.
+   (for example :triangles or :triangle-strip)"
+  [mode offset n element-buffer]
+  (let [glmode (cond
+                 (= mode :triangles) GL_TRIANGLES
+                 (= mode :triangle-strip) GL_TRIANGLE_STRIP)] 
+    (glBindBuffer GL_ELEMENT_ARRAY_BUFFER element-buffer)
+    (glDrawElements glmode n GL_UNSIGNED_INT offset)))
+
 (defn texture-2d 
   "create 2D texture with as many mipmap levels as supported"
   [path]
