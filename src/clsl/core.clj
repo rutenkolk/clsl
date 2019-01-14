@@ -1495,10 +1495,42 @@ new-pipe (assoc-in
         _ (org.lwjgl.stb.STBImage/stbi_image_free stbi-buf)]
     texid))
 
+(defn buf-wrap "slow buf" [coll]
+  (let [coll-t (type (first coll))
+        host-buf (cond 
+                   (= coll-t java.lang.Float)
+                     (let [b (BufferUtils/createFloatBuffer (count coll))
+                           _ (doall (map #(.put b (unchecked-float %)) coll))]
+                       b)
+                   (= coll-t java.lang.Integer)
+                     (let [b (BufferUtils/createIntBuffer (count coll))
+                           _ (doall (map #(.put b (unchecked-int %)) coll))]
+                       b)
+                   (= coll-t java.lang.Byte)
+                     (let [b (BufferUtils/createByteBuffer (count coll))
+                           _ (doall (map #(.put b (unchecked-byte %)) coll))]
+                       b)
+                   (= coll-t java.lang.Double)
+                     (let [b (BufferUtils/createDoubleBuffer (count coll))
+                           _ (doall (map #(.put b (unchecked-double %)) coll))]
+                       b)
+                   (= coll-t java.lang.Short)
+                     (let [b (BufferUtils/createShortBuffer (count coll))
+                           _ (doall (map #(.put b (unchecked-short %)) coll))]
+                       b))
+        _ (.flip host-buf)
+  
+      buf-obj-id (glGenBuffers)
+      _ (glBindBuffer GL_ARRAY_BUFFER buf-obj-id)
+      _ (glBufferData GL_ARRAY_BUFFER host-buf GL_STATIC_DRAW)
+      _ (glBindBuffer GL_ARRAY_BUFFER 0)]
+    buf-obj-id))
+
 (defn buf 
   ([coll]
     (let [coll-t (type coll)
           host-buf (cond
+                     (instance? java.nio.Buffer coll) coll
                      (= coll-t float-array-type)
                        (-> (BufferUtils/createFloatBuffer (count coll))
                          (.put coll)
@@ -1519,17 +1551,18 @@ new-pipe (assoc-in
                        (-> (BufferUtils/createShortBuffer (count coll))
                          (.put coll)
                          (.flip))
+                     (sequential? coll) (buf-wrap coll)
                      :auieee (throw 
                                (IllegalArgumentException. 
                                  (str "Wrong type to create buffer. 
                                       Must be native array of 
                                       bytes,ints,shorts,floats or doubles.
+                                      Slow, but working is anything that is sequential?
                                       Type was:" coll-t))))
           buf-obj-id (glGenBuffers)
           _ (glBindBuffer GL_ARRAY_BUFFER buf-obj-id)
           _ (glBufferData GL_ARRAY_BUFFER host-buf GL_STATIC_DRAW)
-          _ (glBindBuffer GL_ARRAY_BUFFER 0)
-          ]
+          _ (glBindBuffer GL_ARRAY_BUFFER 0)]
       buf-obj-id))
   ([size address] 
     (let [buf-obj-id (glGenBuffers)
