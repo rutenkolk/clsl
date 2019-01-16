@@ -61,7 +61,7 @@
        (c/prime-shader 
          texture-frag-shader (first vert-out) cool_texture (second vert-out) blend)])))
 
-(defn create-texture-quad-drawer [texture-id-lookup [offx offy]]
+(defn create-texture-quad-drawer [t-off scale-factor texture-id-lookup [offx offy]]
   (c/drawer [tr-buf [:objs :tr-buf]
              my-texture [:objs texture-id-lookup]
              tr-buf-count [:objs :tr-buf-count]
@@ -71,11 +71,16 @@
      (c/texture-2d-take my-texture)
      (c/buf-take tr-buf :vec2 (c/size-of-type :vec4 :vec4 :vec2) (c/size-of-type :vec4 :vec4))
      (c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4 :vec2) (c/size-of-type :vec4))
-     (let [adjusted_t (* t 0.001)] 
-       (.times
+     (let [adjusted_t (* t 0.001)
+           s (+ 0.5 (/ (Math/sin (* t 0.001 t-off)) (inc scale-factor)))] 
+       (.times 
+        (.scale glm.glm/INSTANCE (glm.mat4x4.Mat4. 1) (glm.vec3.Vec3. s s s))
+        (.times
          (.rotate glm.glm/INSTANCE (glm.mat4x4.Mat4. 1) adjusted_t (glm.vec3.Vec3. 0 0 -1))
-         (.translate glm.glm/INSTANCE (glm.mat4x4.Mat4. 1) (glm.vec3.Vec3. offx offy 0))))
-     (+ 0.5 (/ (Math/sin (* t 0.001)) 2))]
+         (.times
+          (.translate glm.glm/INSTANCE (glm.mat4x4.Mat4. 1) (glm.vec3.Vec3. offx offy 0))
+          (.rotate glm.glm/INSTANCE (glm.mat4x4.Mat4. 1) (* -2 adjusted_t) (glm.vec3.Vec3. 0 0 -1))))))
+     (+ 0.5 (/ (Math/sin (* t 0.001 t-off)) 2))]
     (c/drawarrays :triangles 0 tr-buf-count)))
 
 (defn my-state-init-fn [state]
@@ -88,8 +93,24 @@
          :time 0)) 
 
 (defn demo []
-  (c/add-drawer! (create-texture-quad-drawer :tex-id-1 [-0.5 0.0]))
-  (c/add-drawer! (create-texture-quad-drawer :tex-id-2 [0.5 0.0]))
+  (c/add-drawer! (create-texture-quad-drawer 1 1 :tex-id-1 [-0.5 0.5]))
+  (c/add-drawer! (create-texture-quad-drawer 2 1 :tex-id-1 [0.5 -0.5]))
+  (c/add-drawer! (create-texture-quad-drawer 3 1 :tex-id-2 [-0.5 -0.5]))
+  (c/add-drawer! (create-texture-quad-drawer 4 1 :tex-id-2 [0.5 0.5]))
+  (c/add-update-fn! (fn [state] (assoc state :time (- (System/currentTimeMillis) (:start-time state)))))
+  (c/start! my-state-init-fn)
+  (c/reset-global-state!)
+  "Demo completed. Global State has been reset!")
+
+(defn demo2 [width]
+  (doall 
+    (for [w (range width) h (range width)] 
+      (let [n (+ (* h width ) w)] 
+        (c/add-drawer! 
+          (create-texture-quad-drawer n 
+                                      (- width 1)
+                                      (keyword (str "tex-id-" (inc (mod n 2))))
+                                      [(- w -0.5 (/ width 2)) (- h -0.5 (/ width 2))])))))
   (c/add-update-fn! (fn [state] (assoc state :time (- (System/currentTimeMillis) (:start-time state)))))
   (c/start! my-state-init-fn)
   (c/reset-global-state!)
@@ -97,4 +118,5 @@
 
 (comment 
   "evaluating the expression below may show you textured triangles" 
-  (demo))
+  (demo)
+  (demo2 3))
