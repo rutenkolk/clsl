@@ -213,20 +213,21 @@
                     (.rotate (glm.mat4x4.Mat4. 1) (float (* 0.5 Math/PI)) (glm.vec3.Vec3. 0 1 0)) 
                     1.5 1.5 1.5)] 
     ;(doall (map #(c/add-drawer! (create-obj-drawer %)) (:meshes model)))
-    (assoc 
-      state
-      :objs {:meshes (:meshes model)
-             :materials (:materials model)
-             :view-projection-mat (glm.mat4x4.Mat4. 1)
-             :view-mat (glm.mat4x4.Mat4. 1)
-             :model-mat model-mat 
-             :normal-mat (.transpose (.inverse (glm.mat3x3.Mat3. model-mat)))
-             :view-position [0 0 0]
-             :fov 60})))
-
+    (c/add-drawer (create-obj-drawer (first (:meshes model))) 
+      (assoc 
+        state
+        :objs {:meshes (:meshes model)
+               :materials (:materials model)
+               :view-projection-mat (glm.mat4x4.Mat4. 1)
+               :view-mat (glm.mat4x4.Mat4. 1)
+               :model-mat model-mat 
+               :normal-mat (.transpose (.inverse (glm.mat3x3.Mat3. model-mat)))
+               :view-position [0 0 0]
+               :fov 60
+               :start-time (System/currentTimeMillis)}))))
 (defn update-fn [state]
-  (let [_ (println "000000")
-        new-t (- (System/currentTimeMillis) (:start-time state)) 
+  (let [_ (println "000000AAA")
+        new-t (- (System/currentTimeMillis) (-> state :objs :start-time)) 
         _ (println "a")
         t (* 0.001 new-t)
         _ (println "b")
@@ -245,11 +246,11 @@
         view-projection (.times view-mat projection)
         _ (println "f")
         ]
-    (assoc
-      state
-      :objs {:view-projection-mat view-projection
-             :view-mat view-mat
-             :view-position view-position}
+    (assoc 
+      (update-in state [:objs] merge
+               {:view-projection-mat view-projection 
+                :view-mat view-mat 
+                :view-position view-position}) 
       :time new-t)))
 (defn demo []
   (c/add-update-fn! update-fn)
@@ -257,5 +258,4 @@
   (c/reset-global-state!)
   "Demo completed. Global State has been reset!")
 (comment
-  (demo)
-  )
+  (demo))

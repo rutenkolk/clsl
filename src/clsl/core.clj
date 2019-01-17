@@ -793,7 +793,12 @@ just extend the protocol to your liking"
 
 ;OH GOD. i need seperate files for all this crap
 (defn interface-type-map [drawer init-state] 
-  (map convert-type ((:interface-fill drawer) init-state))) 
+  (let [interface-fill-fn (:interface-fill drawer)
+        _ (println "interface fill fn:")  
+        _ (pp interface-fill-fn)
+        interface-fill ((:interface-fill drawer) init-state)
+        _ (println "interface fill complete!")] 
+    (map convert-type interface-fill)))
 
 (defn interface-modifier-map [drawer init-state] 
   (map #(if (and (map? %) (= :buf-take (:name %))) :in :uniform) ((:interface-fill drawer) init-state))) 
@@ -939,9 +944,14 @@ just extend the protocol to your liking"
 (if (:primitive? arg) arg ;if already emittable, this fn is the identity
 (let [
 init-state (if (:custom-state arg) (:custom-state arg) @global-state)
+_ (println "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+;_ (println "arg:")
+;_ (pp arg)
+;_ (println "init-state:")
+;_ (pp init-state)
 i-face-types (interface-type-map arg init-state)
 i-face-modifiers (interface-modifier-map arg init-state)
-
+_ (println "---------------------------------------------------------")
 pipe-interface (-> arg :pipe :pipeline-interface)
 v-shader-vardecs (-> arg :pipe :vertex-shader :vardecs)
 v-shader-bound-vars (-> arg :pipe :vertex-shader :bound-vars)
@@ -956,7 +966,6 @@ v-shader-manual-out-type-info (map (fn [elem]
 
 f-shader-vardecs (-> arg :pipe :fragment-shader :vardecs)
 f-shader-bound-vars (-> arg :pipe :fragment-shader :bound-vars)
-
 inputs (partition 3 3 (interleave pipe-interface i-face-types i-face-modifiers))
 
 vert-outs (map (fn [vardec] 
@@ -1442,6 +1451,7 @@ new-pipe (assoc-in
                                  (fn [[bind-name q-vec]]
                                   `(~bind-name (retrieve-nested ~'init-state ~q-vec))) 
                                  (partition 2 2 query-statement))))
+
         interface-fill-fn `(fn [~'init-state]
                              (let ~state-queries-bind
                                ~interface-fill))
@@ -1594,6 +1604,21 @@ new-pipe (assoc-in
 (defn def-delayed-defs! []
   (doall (map #(%) (-> @global-state :internals :delayed-defs))))
 
+(defn add-drawer 
+  ([new-drawer state]
+    (let [generated-key (keyword (gensym "__drawer__"))] 
+      (update-in 
+        (assoc-in state [:internals :drawers generated-key] new-drawer) 
+        [:internals :not-compiled-drawers-keys] 
+        conj 
+        generated-key)))
+  ([new-drawer key state] 
+   (update-in 
+     (assoc-in state [:internals :drawers key] new-drawer) 
+     [:internals :not-compiled-drawers-keys] 
+     conj 
+     key)))
+
 (defn add-drawer!
   ([new-drawer]
     (let [generated-key (keyword (gensym "__drawer__"))]
@@ -1686,10 +1711,13 @@ new-pipe (assoc-in
     drawer ;already ret-2-go
     (let [_ (println "drawer does not have a program. COMPILING ...")
           prim-drawer (to-primitives drawer)
+          _ (println "compile-glsl...")
           shdrs (compile-glsl prim-drawer)
+          _ (println "create shader program")
           program (create-simple-program 
                     (:vertex-shader shdrs)
                     (:fragment-shader shdrs))
+          _ (println "assemble prim prog with drawer program")
           prim-with-program-drawer (assoc prim-drawer
                                           :program
                                           program)
