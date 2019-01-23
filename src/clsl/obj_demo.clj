@@ -91,12 +91,12 @@
     {:meshes meshes
      :materials materials}))
 
-
+; --- SHADERS ---
 
 (def obj-vert-shader
   (c/vertex-shader [aVertex aNormal uModelMatrix uViewProjectionMatrix uNormalMatrix]
-    [(c/mul uViewProjectionMatrix uModelMatrix aVertex)
-     (c/typed :vec3 (c/swizzle (c/mul uModelMatrix aVertex) :xyz))
+    [(c/mul uViewProjectionMatrix uModelMatrix (c/vec4 aVertex 0))
+     (c/typed :vec3 (c/swizzle (c/mul uModelMatrix (c/vec4 aVertex 0)) :xyz))
      (c/typed :vec3 (c/mul uNormalMatrix aNormal))]))
 
 (def obj-frag-shader
@@ -123,6 +123,8 @@
                                uSpecularColor)]
       (c/vec4 (c/add ambientColor diffuseColor specularColor) 1.0))))
 
+; --- PIPELINE ---
+
 (def obj-render-pipeline
   (let [vert-out (c/shader-output obj-vert-shader)]
     (c/simple-pipeline [aVertex aNormal uModelMatrix uViewProjectionMatrix 
@@ -134,10 +136,16 @@
          uLightPosition uViewPosition uAmbientColor uDiffuseColor uSpecularColor 
          (first vert-out) (second vert-out))])))
 
+; --- DRAWER ---
+
 (defn create-obj-drawer [mesh] 
-  (c/drawer [mesh [:objs :meshes mesh]
-             materials [:objs :materials] 
-             view-position [:obj :view-position]
+  (c/drawer [materials [:objs :materials] 
+             ;_ [(do (clojure.pprint/pprint "im in the state query bind :D") :time)]
+             ;_ [(do (clojure.pprint/pprint materials) :time)]
+             ;_ [(do (clojure.pprint/pprint (-> init-state :objs)) :time)]
+             view-position [:objs :view-position]
+             ;_ [(do (clojure.pprint/pprint "im in the state query bind :D") :time)]
+             ;_ [(do (clojure.pprint/pprint view-position) :time)]
              view-projection-mat [:objs :view-projection-mat]
              view-mat [:objs :view-mat]
              model-mat [:objs :model-mat]
@@ -154,7 +162,9 @@
      (:ambient-color (nth materials (:material-index mesh)))
      (:diffuse-color (nth materials (:material-index mesh)))
      (:specular-color (nth materials (:material-index mesh)))]
-    (c/draw-elements :triangles 0 (:elem-count mesh))))
+      (c/draw-elements :triangles 0 (:elem-count mesh) (:element-buf mesh))))
+
+; --- second drawer ---
 
 (def positions
   ;X    Y    Z    W
@@ -179,6 +189,11 @@
     [(c/mul trans_mat pos)
      (c/typed :vec4 color)]))
 
+(def demo-vert-shader2
+  (c/vertex-shader [pos model_mat view_projection_mat refmat color mix]
+    [(c/mul (c/add (c/mul (c/sub 1 mix) refmat) (c/mul mix (c/mul view_projection_mat model_mat))) pos)
+     (c/typed :vec4 color)]))
+
 (def demo-frag-shader
   (c/fragment-shader [color factor]
     (c/mul color factor)))
@@ -187,6 +202,12 @@
   (let [vert-out (c/shader-output demo-vert-shader)] 
     (c/simple-pipeline [pos color mvp light_factor]
       [(c/prime-shader demo-vert-shader pos mvp color) 
+       (c/prime-shader demo-frag-shader (first vert-out) light_factor)])))
+
+(def demo-render-pipeline2
+  (let [vert-out (c/shader-output demo-vert-shader2)] 
+    (c/simple-pipeline [pos color uModelMatrix uViewProjectionMatrix reference-mat t light_factor]
+      [(c/prime-shader demo-vert-shader2 pos uModelMatrix uViewProjectionMatrix reference-mat color t) 
        (c/prime-shader demo-frag-shader (first vert-out) light_factor)])))
 
 (def demo-triangle-drawer
@@ -205,18 +226,38 @@
      1]
     (c/drawarrays :triangles 0 tr-buf-count)))
 
+(def demo-triangle-drawer2
+  (c/drawer [tr-buf [:objs :tr-buf]
+             tr-buf-count [:objs :tr-buf-count]
+             view-proj-mat [:objs :view-projection-mat]
+             model-mat [:objs :model-mat]
+             t [:time]]
+    demo-render-pipeline2
+    [(c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4) 0)
+     (c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4) (c/size-of-type :vec4))
+     (glm.mat4x4.Mat4. 1)
+     ;model-mat
+     view-proj-mat
+     (glm.mat4x4.Mat4. 1)
+     (+ 0.5 (/ (Math/sin (* 0.001 t)) 2))
+     1]
+    (c/drawarrays :triangles 0 tr-buf-count)))
+
 (defn init-fn [state]
   (let [model (load-obj-model "res/magnet.obj")
-        _ (println "model loaded! here is the model as a clojure map:")
+        ;_ (println "model loaded! here is the model as a clojure map:")
         ;_ (clojure.pprint/pprint model)
         model-mat (.scale 
                     (.rotate (glm.mat4x4.Mat4. 1) (float (* 0.5 Math/PI)) (glm.vec3.Vec3. 0 1 0)) 
                     1.5 1.5 1.5)] 
     ;(doall (map #(c/add-drawer! (create-obj-drawer %)) (:meshes model)))
-    (c/add-drawer (create-obj-drawer (first (:meshes model))) 
+    (reduce (fn [acc-state mesh-i] 
+              (c/add-drawer (create-obj-drawer mesh-i) acc-state)) 
       (assoc 
         state
-        :objs {:meshes (:meshes model)
+        :objs {:tr-buf (c/buf (c/load-value-to-array interleaved-data))
+               :tr-buf-count 3
+               :meshes (:meshes model)
                :materials (:materials model)
                :view-projection-mat (glm.mat4x4.Mat4. 1)
                :view-mat (glm.mat4x4.Mat4. 1)
@@ -224,38 +265,46 @@
                :normal-mat (.transpose (.inverse (glm.mat3x3.Mat3. model-mat)))
                :view-position [0 0 0]
                :fov 60
-               :start-time (System/currentTimeMillis)}))))
+               :start-time (System/currentTimeMillis)}
+        :time 0
+        )
+      (:meshes model))))
+
 (defn update-fn [state]
-  (let [_ (println "000000AAA")
-        new-t (- (System/currentTimeMillis) (-> state :objs :start-time)) 
-        _ (println "a")
+  (let [new-t (- (System/currentTimeMillis) (-> state :objs :start-time)) 
         t (* 0.001 new-t)
-        _ (println "b")
+        _ (println "fov, aspect ratio:")
+        _ (println (Math/toRadians (-> state :objs :fov)))
+        _ (println (float (/ (:width state) (:height state))))
         projection (.perspective glm.glm/INSTANCE 
-                                 (Math/toRadians (-> state :objs :fov)) (float (/ (:width state) (:height state)))
+                                 (double (-> state :objs :fov))
+                                 ;(Math/toRadians (-> state :objs :fov))
+                                 (float (/ (:width state) (:height state)))
                                  0.01
                                  100.0)
-        _ (println "c")
         view-position [(* 10 (Math/cos t)) 10.0 (* 10 (Math/sin t))]
-        _ (println "d")
         view-mat (.lookAt glm.glm/INSTANCE 
-                          (glm.vec3.Vec3. (* 10 (Math/cos 1)) 10.0 (* 10 (Math/sin 1))) 
+                          (glm.vec3.Vec3. 1 10 1) 
                           (glm.vec3.Vec3. 0 0 0) 
                           (glm.vec3.Vec3. 0 1 0))
-        _ (println "e")
-        view-projection (.times view-mat projection)
-        _ (println "f")
-        ]
+        view-projection (.times view-mat projection)]
     (assoc 
       (update-in state [:objs] merge
                {:view-projection-mat view-projection 
                 :view-mat view-mat 
                 :view-position view-position}) 
       :time new-t)))
+
 (defn demo []
   (c/add-update-fn! update-fn)
+  ;(c/add-drawer! demo-triangle-drawer)
+  (c/add-drawer! demo-triangle-drawer2)
   (c/start! init-fn)
+  (println "fps stats:")
+  (clojure.pprint/pprint (-> @c/global-state :internals :fps-stats))
   (c/reset-global-state!)
   "Demo completed. Global State has been reset!")
+
 (comment
-  (demo))
+  (demo)
+  )

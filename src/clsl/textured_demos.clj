@@ -92,6 +92,8 @@
   (c/add-drawer! (create-texture-quad-drawer :tex-id-2 [0.5 0.0]))
   (c/add-update-fn! (fn [state] (assoc state :time (- (System/currentTimeMillis) (:start-time state)))))
   (c/start! my-state-init-fn)
+  (println "fps stats:")
+  (clojure.pprint/pprint (-> @c/global-state :internals :fps-stats))
   (c/reset-global-state!)
   "Demo completed. Global State has been reset!")
 

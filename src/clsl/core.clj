@@ -794,10 +794,12 @@ just extend the protocol to your liking"
 ;OH GOD. i need seperate files for all this crap
 (defn interface-type-map [drawer init-state] 
   (let [interface-fill-fn (:interface-fill drawer)
-        _ (println "interface fill fn:")  
-        _ (pp interface-fill-fn)
+        ;_ (println "interface fill fn:")  
+        ;_ (pp interface-fill-fn)
         interface-fill ((:interface-fill drawer) init-state)
-        _ (println "interface fill complete!")] 
+        ;_ (println "interface fill complete!")
+        
+        ] 
     (map convert-type interface-fill)))
 
 (defn interface-modifier-map [drawer init-state] 
@@ -944,14 +946,14 @@ just extend the protocol to your liking"
 (if (:primitive? arg) arg ;if already emittable, this fn is the identity
 (let [
 init-state (if (:custom-state arg) (:custom-state arg) @global-state)
-_ (println "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+;_ (println "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
 ;_ (println "arg:")
 ;_ (pp arg)
 ;_ (println "init-state:")
 ;_ (pp init-state)
 i-face-types (interface-type-map arg init-state)
 i-face-modifiers (interface-modifier-map arg init-state)
-_ (println "---------------------------------------------------------")
+;_ (println "---------------------------------------------------------")
 pipe-interface (-> arg :pipe :pipeline-interface)
 v-shader-vardecs (-> arg :pipe :vertex-shader :vardecs)
 v-shader-bound-vars (-> arg :pipe :vertex-shader :bound-vars)
@@ -1107,16 +1109,23 @@ exec-fn (let
            index-list (map second uniform-layout-to-interface-index-list)]
             (fn [drawer latest-state]
               (let [curr-interface-fill ((:interface-fill arg) latest-state)]
+                ;(println "exec-fn 1")
                 (map-indexed #(list %2 (load-value-to-array 
                                       (nth curr-interface-fill (nth index-list %1)))) 
                                uniform-calls)
+                ;(println "exec-fn 2")
                 (glUseProgram (:program drawer))
+                ;(println "exec-fn 3")
                 (glBindVertexArray (:vao drawer))
+                ;(println "exec-fn 4")
                 (doall 
                   (map-indexed #(%2 (load-value-to-array 
                                       (nth curr-interface-fill (nth index-list %1)))) 
                                uniform-calls))
-                ((:drawcmds-fn arg) latest-state))))
+                ;(println "exec-fn 5")
+                ((:drawcmds-fn arg) latest-state)
+                ;(println "exec-fn 6")
+                )))
 
 new-pipe (assoc-in 
            (assoc-in (:pipe arg) 
@@ -1284,7 +1293,7 @@ new-pipe (assoc-in
     (recur (create-max-tuples coll))))
 
 (defmethod emit-form "max" [arg]
-  (max-emit (:args arg)))
+  (emit (max-emit (:args arg))))
 
 (defmethod emit-form "normalize" [arg]
   (str "normalize(" (emit (:arg arg)) ")"))
@@ -1293,6 +1302,11 @@ new-pipe (assoc-in
   (str "reflect(" 
        (emit (:i arg)) "," 
        (emit (:n arg)) ")"))
+
+(defmethod emit-form "pow" [arg]
+  (str "pow(" 
+       (emit (:n arg)) "," 
+       (emit (:exp arg)) ")"))
 
 (defmethod emit-form "sample" [arg]
   (str "texture(" (emit (:sampler arg)) ", " (emit (:texcoords arg)) ")" ))
@@ -1451,7 +1465,8 @@ new-pipe (assoc-in
                                  (fn [[bind-name q-vec]]
                                   `(~bind-name (retrieve-nested ~'init-state ~q-vec))) 
                                  (partition 2 2 query-statement))))
-
+        ;_ (println "state-queries-bind:")
+        ;_ (pp state-queries-bind)
         interface-fill-fn `(fn [~'init-state]
                              (let ~state-queries-bind
                                ~interface-fill))
@@ -1711,13 +1726,10 @@ new-pipe (assoc-in
     drawer ;already ret-2-go
     (let [_ (println "drawer does not have a program. COMPILING ...")
           prim-drawer (to-primitives drawer)
-          _ (println "compile-glsl...")
           shdrs (compile-glsl prim-drawer)
-          _ (println "create shader program")
           program (create-simple-program 
                     (:vertex-shader shdrs)
                     (:fragment-shader shdrs))
-          _ (println "assemble prim prog with drawer program")
           prim-with-program-drawer (assoc prim-drawer
                                           :program
                                           program)
@@ -1810,21 +1822,32 @@ new-pipe (assoc-in
         (update-with-context! true)
         (println "UPDATE...")
         (update!)
+
+        (println "init! returned:")
+        (pp window-handle)
         (println "STARTING UPDATE THREAD...")
         (.start update-thread)
         (println "ENTERING HOT LOOP...")
+        (glDisable GL_CULL_FACE)
         (while (not (glfwWindowShouldClose window-handle))
+        ;(println "start HOT LOOP...")
           (let [curr-t (System/nanoTime)] 
-            (if (> (- curr-t @start-t) 1000000)
+            (if (> (- curr-t @start-t) 1000000000)
               (do
-                (swap! global-state update-in [:internals :fps-stats] conj (- curr-t @start-t))
+                (swap! global-state update-in [:internals :fps-stats] conj @num-frames)
                 (var-set start-t curr-t)
                 (var-set num-frames 0))
               (var-set num-frames (inc @num-frames))))
+        ;(println "now update of HOT LOOP...")
           (update-with-context!)
+        ;(println "now clear of HOT LOOP...")
           (glClear (bit-or GL_COLOR_BUFFER_BIT  GL_DEPTH_BUFFER_BIT))
-          (render!)
+          ;(glClearColor 128 128 128 128)
+        ;(println "now render of HOT LOOP...")
+          (render!) ; herer is nullpointer exception
+        ;(println "now swap of HOT LOOP...")
           (glfwSwapBuffers window-handle)
+        ;(println "now poll of HOT LOOP...")
           (glfwPollEvents))
         (println "REQUESTING UPDATE THREAD STOP...")
         (swap! global-state assoc :should-stop? true)
