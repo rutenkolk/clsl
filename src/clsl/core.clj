@@ -1829,6 +1829,8 @@ new-pipe (assoc-in
         (.start update-thread)
         (println "ENTERING HOT LOOP...")
         (glDisable GL_CULL_FACE)
+        (glEnable GL_DEPTH_TEST)
+        (glDepthFunc GL_LEQUAL)
         (while (not (glfwWindowShouldClose window-handle))
         ;(println "start HOT LOOP...")
           (let [curr-t (System/nanoTime)] 

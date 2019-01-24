@@ -121,7 +121,9 @@
                                    0.0) 
                                  shininess) 
                                uSpecularColor)]
-      (c/vec4 (c/add ambientColor diffuseColor specularColor) 1.0))))
+      (c/vec4 (c/add ambientColor diffuseColor specularColor) 1.0)
+      (c/vec4 1.0 1.0 1.0 1.0)
+      )))
 
 ; --- PIPELINE ---
 
@@ -162,7 +164,7 @@
      (:ambient-color (nth materials (:material-index mesh)))
      (:diffuse-color (nth materials (:material-index mesh)))
      (:specular-color (nth materials (:material-index mesh)))]
-      (c/draw-elements :triangles 0 (:elem-count mesh) (:element-buf mesh))))
+       (c/draw-elements :triangles 0 (:elem-count mesh) (:element-buf mesh))))
 
 ; --- second drawer ---
 
@@ -226,20 +228,21 @@
      1]
     (c/drawarrays :triangles 0 tr-buf-count)))
 
-(def demo-triangle-drawer2
+(defn demo-triangle-drawer2 [model-mat-name]
   (c/drawer [tr-buf [:objs :tr-buf]
              tr-buf-count [:objs :tr-buf-count]
              view-proj-mat [:objs :view-projection-mat]
-             model-mat [:objs :model-mat]
+             model-mat [:objs model-mat-name]
              t [:time]]
     demo-render-pipeline2
     [(c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4) 0)
      (c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4) (c/size-of-type :vec4))
-     (glm.mat4x4.Mat4. 1)
-     ;model-mat
+     ;(glm.mat4x4.Mat4. 1)
+     model-mat
      view-proj-mat
      (glm.mat4x4.Mat4. 1)
-     (+ 0.5 (/ (Math/sin (* 0.001 t)) 2))
+     ;(+ 0.5 (/ (Math/sin (* 0.001 t)) 2))
+     1
      1]
     (c/drawarrays :triangles 0 tr-buf-count)))
 
@@ -248,8 +251,16 @@
         ;_ (println "model loaded! here is the model as a clojure map:")
         ;_ (clojure.pprint/pprint model)
         model-mat (.scale 
-                    (.rotate (glm.mat4x4.Mat4. 1) (float (* 0.5 Math/PI)) (glm.vec3.Vec3. 0 1 0)) 
-                    1.5 1.5 1.5)] 
+                    (.rotate (glm.mat4x4.Mat4. 1) 
+                             (float (* 0.5 Math/PI)) 
+                             (glm.vec3.Vec3. 0 1 0)) 
+                    1.5 1.5 1.5)
+        model-mat-90 (.scale 
+                       (.rotate (glm.mat4x4.Mat4. 1) 
+                                (float Math/PI) 
+                                (glm.vec3.Vec3. 0 1 0)) 
+                       1.5 1.5 1.5)
+        ] 
     ;(doall (map #(c/add-drawer! (create-obj-drawer %)) (:meshes model)))
     (reduce (fn [acc-state mesh-i] 
               (c/add-drawer (create-obj-drawer mesh-i) acc-state)) 
@@ -262,6 +273,7 @@
                :view-projection-mat (glm.mat4x4.Mat4. 1)
                :view-mat (glm.mat4x4.Mat4. 1)
                :model-mat model-mat 
+               :model-mat-90 model-mat-90 
                :normal-mat (.transpose (.inverse (glm.mat3x3.Mat3. model-mat)))
                :view-position [0 0 0]
                :fov 60
@@ -273,21 +285,20 @@
 (defn update-fn [state]
   (let [new-t (- (System/currentTimeMillis) (-> state :objs :start-time)) 
         t (* 0.001 new-t)
-        _ (println "fov, aspect ratio:")
-        _ (println (Math/toRadians (-> state :objs :fov)))
-        _ (println (float (/ (:width state) (:height state))))
+        distance 10
+        r (+ 1 (/ distance 2) (* (/ distance 2) (Math/sin (* 0.5 t))))
+        height (+ (/ distance 4) (* (/ distance 4) (Math/sin (* 0.3 t)))) 
         projection (.perspective glm.glm/INSTANCE 
-                                 (double (-> state :objs :fov))
-                                 ;(Math/toRadians (-> state :objs :fov))
+                                 (Math/toRadians (-> state :objs :fov))
                                  (float (/ (:width state) (:height state)))
                                  0.01
                                  100.0)
-        view-position [(* 10 (Math/cos t)) 10.0 (* 10 (Math/sin t))]
+        view-position [(* r (Math/cos t)) r (* r (Math/sin t))]
         view-mat (.lookAt glm.glm/INSTANCE 
-                          (glm.vec3.Vec3. 1 10 1) 
-                          (glm.vec3.Vec3. 0 0 0) 
-                          (glm.vec3.Vec3. 0 1 0))
-        view-projection (.times view-mat projection)]
+                          (glm.vec3.Vec3. (* r (Math/cos t)) height (* r (Math/sin t))) ;eye pos
+                          (glm.vec3.Vec3. 0 0 0)  ;center (where to look at)
+                          (glm.vec3.Vec3. 0 1 0)) ;up-vector (orientation vector of our coordinate system from eye)
+        view-projection (.times projection view-mat)]
     (assoc 
       (update-in state [:objs] merge
                {:view-projection-mat view-projection 
@@ -298,7 +309,8 @@
 (defn demo []
   (c/add-update-fn! update-fn)
   ;(c/add-drawer! demo-triangle-drawer)
-  (c/add-drawer! demo-triangle-drawer2)
+  (c/add-drawer! (demo-triangle-drawer2 :model-mat))
+  (c/add-drawer! (demo-triangle-drawer2 :model-mat-90))
   (c/start! init-fn)
   (println "fps stats:")
   (clojure.pprint/pprint (-> @c/global-state :internals :fps-stats))
