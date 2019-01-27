@@ -84,7 +84,7 @@
         
         _ (println "loading model finished.")
         _ (println "Assimp error String:" (org.lwjgl.assimp.Assimp/aiGetErrorString))
-        ;_ (org.lwjgl.assimp.Assimp/aiReleaseImport scene)
+        _ (org.lwjgl.assimp.Assimp/aiReleaseImport scene)
         ]
     {:meshes meshes
      :materials materials}))
