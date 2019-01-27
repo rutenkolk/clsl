@@ -794,12 +794,7 @@ just extend the protocol to your liking"
 ;OH GOD. i need seperate files for all this crap
 (defn interface-type-map [drawer init-state] 
   (let [interface-fill-fn (:interface-fill drawer)
-        ;_ (println "interface fill fn:")  
-        ;_ (pp interface-fill-fn)
-        interface-fill ((:interface-fill drawer) init-state)
-        ;_ (println "interface fill complete!")
-        
-        ] 
+        interface-fill ((:interface-fill drawer) init-state)] 
     (map convert-type interface-fill)))
 
 (defn interface-modifier-map [drawer init-state] 
@@ -946,14 +941,8 @@ just extend the protocol to your liking"
 (if (:primitive? arg) arg ;if already emittable, this fn is the identity
 (let [
 init-state (if (:custom-state arg) (:custom-state arg) @global-state)
-;_ (println "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-;_ (println "arg:")
-;_ (pp arg)
-;_ (println "init-state:")
-;_ (pp init-state)
 i-face-types (interface-type-map arg init-state)
 i-face-modifiers (interface-modifier-map arg init-state)
-;_ (println "---------------------------------------------------------")
 pipe-interface (-> arg :pipe :pipeline-interface)
 v-shader-vardecs (-> arg :pipe :vertex-shader :vardecs)
 v-shader-bound-vars (-> arg :pipe :vertex-shader :bound-vars)
@@ -1109,23 +1098,16 @@ exec-fn (let
            index-list (map second uniform-layout-to-interface-index-list)]
             (fn [drawer latest-state]
               (let [curr-interface-fill ((:interface-fill arg) latest-state)]
-                ;(println "exec-fn 1")
                 (map-indexed #(list %2 (load-value-to-array 
                                       (nth curr-interface-fill (nth index-list %1)))) 
                                uniform-calls)
-                ;(println "exec-fn 2")
                 (glUseProgram (:program drawer))
-                ;(println "exec-fn 3")
                 (glBindVertexArray (:vao drawer))
-                ;(println "exec-fn 4")
                 (doall 
                   (map-indexed #(%2 (load-value-to-array 
                                       (nth curr-interface-fill (nth index-list %1)))) 
                                uniform-calls))
-                ;(println "exec-fn 5")
-                ((:drawcmds-fn arg) latest-state)
-                ;(println "exec-fn 6")
-                )))
+                ((:drawcmds-fn arg) latest-state))))
 
 new-pipe (assoc-in 
            (assoc-in (:pipe arg) 
@@ -1465,8 +1447,6 @@ new-pipe (assoc-in
                                  (fn [[bind-name q-vec]]
                                   `(~bind-name (retrieve-nested ~'init-state ~q-vec))) 
                                  (partition 2 2 query-statement))))
-        ;_ (println "state-queries-bind:")
-        ;_ (pp state-queries-bind)
         interface-fill-fn `(fn [~'init-state]
                              (let ~state-queries-bind
                                ~interface-fill))
@@ -1496,6 +1476,36 @@ new-pipe (assoc-in
                  (= mode :triangle-strip) GL_TRIANGLE_STRIP)]
     (glBindBuffer GL_ELEMENT_ARRAY_BUFFER element-buffer)
     (glDrawElements glmode n GL_UNSIGNED_INT offset)))
+
+(defn multi-draw-elements
+  "draw n meshes with one draw call.
+   The element-buffer contains the indices of the vertex-data given
+   to the shaders via (buf-take ...)
+
+   offsets is a vector containing the offsets, where to start the nth
+   mesh in the element-buffer
+
+   counts is a vector containing the number of indices used from
+   offset onwards in the element-buffer.
+
+   This call is equivalent (but much faster) to:
+     (doall 
+       (map 
+         #(draw-elements mode (nth offsets %) (nth counts %) element-buffer) 
+         (range n)))
+
+   Supports OpenGLs modes of Interpreting the buffer data.
+   (for example :triangles or :triangle-strip)"
+  [mode n offsets counts element-buffer]
+  (let [glmode (cond
+                 (= mode :triangles) GL_TRIANGLES
+                 (= mode :triangle-strip) GL_TRIANGLE_STRIP)]
+    (glBindBuffer GL_ELEMENT_ARRAY_BUFFER element-buffer)
+    (glMultiDrawElements glmode 
+                         (into-array Integer/TYPE counts) 
+                         GL_UNSIGNED_INT 
+                         offsets
+                         n)))
 
 (defn texture-2d 
   "create 2D texture with as many mipmap levels as supported"
@@ -1553,8 +1563,6 @@ new-pipe (assoc-in
 (defn buf 
   ([coll]
     (let [coll-t (type coll)
-          _ (println "coll-t is: " coll-t)
-          _ (println "instance? java.nio.Buffer coll-t : " (instance? java.nio.Buffer coll))
           host-buf (cond
                      (instance? java.nio.Buffer coll) coll
                      (= coll-t float-array-type)
@@ -1833,7 +1841,6 @@ new-pipe (assoc-in
         (glEnable GL_DEPTH_TEST)
         (glDepthFunc GL_LEQUAL)
         (while (not (glfwWindowShouldClose window-handle))
-        ;(println "start HOT LOOP...")
           (let [curr-t (System/nanoTime)] 
             (if (> (- curr-t @start-t) 1000000000)
               (do
@@ -1841,16 +1848,11 @@ new-pipe (assoc-in
                 (var-set start-t curr-t)
                 (var-set num-frames 0))
               (var-set num-frames (inc @num-frames))))
-        ;(println "now update of HOT LOOP...")
           (update-with-context!)
-        ;(println "now clear of HOT LOOP...")
           (glClear (bit-or GL_COLOR_BUFFER_BIT  GL_DEPTH_BUFFER_BIT))
           ;(glClearColor 128 128 128 128)
-        ;(println "now render of HOT LOOP...")
           (render!) ; herer is nullpointer exception
-        ;(println "now swap of HOT LOOP...")
           (glfwSwapBuffers window-handle)
-        ;(println "now poll of HOT LOOP...")
           (glfwPollEvents))
         (println "REQUESTING UPDATE THREAD STOP...")
         (swap! global-state assoc :should-stop? true)
