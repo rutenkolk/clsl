@@ -1493,7 +1493,7 @@ new-pipe (assoc-in
   [mode offset n element-buffer]
   (let [glmode (cond
                  (= mode :triangles) GL_TRIANGLES
-                 (= mode :triangle-strip) GL_TRIANGLE_STRIP)] 
+                 (= mode :triangle-strip) GL_TRIANGLE_STRIP)]
     (glBindBuffer GL_ELEMENT_ARRAY_BUFFER element-buffer)
     (glDrawElements glmode n GL_UNSIGNED_INT offset)))
 
@@ -1527,6 +1527,10 @@ new-pipe (assoc-in
                      (let [b (BufferUtils/createFloatBuffer (count coll))
                            _ (doall (map #(.put b (unchecked-float %)) coll))]
                        b)
+                   (= coll-t java.lang.Long)
+                     (let [b (BufferUtils/createIntBuffer (count coll))
+                           _ (doall (map #(.put b (unchecked-int %)) coll))]
+                       b)
                    (= coll-t java.lang.Integer)
                      (let [b (BufferUtils/createIntBuffer (count coll))
                            _ (doall (map #(.put b (unchecked-int %)) coll))]
@@ -1543,17 +1547,14 @@ new-pipe (assoc-in
                      (let [b (BufferUtils/createShortBuffer (count coll))
                            _ (doall (map #(.put b (unchecked-short %)) coll))]
                        b))
-        _ (.flip host-buf)
-  
-      buf-obj-id (glGenBuffers)
-      _ (glBindBuffer GL_ARRAY_BUFFER buf-obj-id)
-      _ (glBufferData GL_ARRAY_BUFFER host-buf GL_STATIC_DRAW)
-      _ (glBindBuffer GL_ARRAY_BUFFER 0)]
-    buf-obj-id))
+        _ (.flip host-buf)]
+    host-buf))
 
 (defn buf 
   ([coll]
     (let [coll-t (type coll)
+          _ (println "coll-t is: " coll-t)
+          _ (println "instance? java.nio.Buffer coll-t : " (instance? java.nio.Buffer coll))
           host-buf (cond
                      (instance? java.nio.Buffer coll) coll
                      (= coll-t float-array-type)

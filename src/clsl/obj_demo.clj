@@ -8,12 +8,28 @@
 (defn create-meshes [ai-meshes]
   (doall 
   (for [mesh ai-meshes] 
-    (let [vertices-buf (c/buf 
-                         (* org.lwjgl.assimp.AIVector3D/SIZEOF (.remaining (.mVertices mesh))) 
-                         (.address (.mVertices mesh)))
-          normals-buf (c/buf 
-                        (* org.lwjgl.assimp.AIVector3D/SIZEOF (.remaining (.mNormals mesh))) 
-                        (.address (.mNormals mesh)))
+    (let [_ (.flip (.mVertices mesh))
+          vertex-count (.remaining (.mVertices mesh))
+          vertices (vec 
+                     (flatten 
+                       (for [i (range vertex-count)] 
+                         (let [aivec (.get (.mVertices mesh) i)]
+                           [(.x aivec) (.y aivec) (.z aivec)]))))
+          vertices-buf (c/buf (c/load-value-to-array vertices))
+
+          normal-count (.remaining (.mNormals mesh))
+          normals (vec 
+                    (flatten 
+                      (for [i (range normal-count)] 
+                        (let [aivec (.get (.mNormals mesh) i)]
+                          [(.x aivec) (.y aivec) (.z aivec)]))))
+          normals-buf (c/buf (c/load-value-to-array normals))
+          ;vertices-buf (c/buf 
+          ;               (* org.lwjgl.assimp.AIVector3D/SIZEOF (.remaining (.mVertices mesh))) 
+          ;               (.address (.mVertices mesh)))
+          ;normals-buf (c/buf 
+          ;              (* org.lwjgl.assimp.AIVector3D/SIZEOF (.remaining (.mNormals mesh))) 
+          ;              (.address (.mNormals mesh)))
           elem-count (* 3 (.mNumFaces mesh))
           faces (.mFaces mesh)
           elems (doall (map #(.mIndices (.get faces %)) (range (.mNumFaces mesh))))
@@ -95,8 +111,8 @@
 
 (def obj-vert-shader
   (c/vertex-shader [aVertex aNormal uModelMatrix uViewProjectionMatrix uNormalMatrix]
-    [(c/mul uViewProjectionMatrix uModelMatrix (c/vec4 aVertex 0))
-     (c/typed :vec3 (c/swizzle (c/mul uModelMatrix (c/vec4 aVertex 0)) :xyz))
+    [(c/mul uViewProjectionMatrix uModelMatrix (c/vec4 aVertex 1))
+     (c/typed :vec3 (c/swizzle (c/mul uModelMatrix (c/vec4 aVertex 1)) :xyz))
      (c/typed :vec3 (c/mul uNormalMatrix aNormal))]))
 
 (def obj-frag-shader
@@ -122,7 +138,7 @@
                                  shininess) 
                                uSpecularColor)]
       (c/vec4 (c/add ambientColor diffuseColor specularColor) 1.0)
-      (c/vec4 1.0 1.0 1.0 1.0)
+      ;(c/vec4 0.5 0.5 0.5 0.5)
       )))
 
 ; --- PIPELINE ---
@@ -164,19 +180,30 @@
      (:ambient-color (nth materials (:material-index mesh)))
      (:diffuse-color (nth materials (:material-index mesh)))
      (:specular-color (nth materials (:material-index mesh)))]
-       (c/draw-elements :triangles 0 (:elem-count mesh) (:element-buf mesh))))
+    (c/draw-elements :triangles 0 (:elem-count mesh) (:element-buf mesh))
+    
+    ))
 
 ; --- second drawer ---
 
 (def positions
   ;X    Y    Z    W
-  [0.0  0.5  0.0  1.0   ; 1. Vertex
+  [0.5  0.5  0.0  1.0   ; 1. Vertex
   -0.5 -0.5  0.0  1.0   ; 2. Vertex
-   0.5 -0.5  0.0  1.0]) ; 3. Vertex 
-
+   0.5 -0.5  0.0  1.0   ; 3. Vertex 
+   
+   0.5  0.5  0.0  1.0   ; 1. Vertex
+  -0.5 -0.5  0.0  1.0   ; 2. Vertex
+  -0.5  0.5  0.0  1.0   ; 3. Vertex 
+   ]) 
+  
 (def colors
   ;R   G   B   A
   [1.0 0.0 0.0 1.0
+   0.0 1.0 0.0 1.0
+   0.0 0.0 1.0 1.0
+   
+   1.0 0.0 0.0 1.0
    0.0 1.0 0.0 1.0
    0.0 0.0 1.0 1.0])
 
@@ -246,6 +273,52 @@
      1]
     (c/drawarrays :triangles 0 tr-buf-count)))
 
+(defn demo-triangle-drawer3 [model-mat-name]
+  (c/drawer [tr-buf [:objs :tr-buf]
+             tr-buf-count [:objs :tr-buf-count]
+             tr-elem-buf [:objs :tr-elem-buf]
+             view-proj-mat [:objs :view-projection-mat]
+             model-mat [:objs model-mat-name]
+             t [:time]]
+    demo-render-pipeline2
+    [(c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4) 0)
+     (c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4) (c/size-of-type :vec4))
+     ;(glm.mat4x4.Mat4. 1)
+     model-mat
+     view-proj-mat
+     (glm.mat4x4.Mat4. 1)
+     ;(+ 0.5 (/ (Math/sin (* 0.001 t)) 2))
+     1
+     1]
+    (c/draw-elements :triangles 0 tr-buf-count tr-elem-buf)))
+
+
+
+
+
+(defn demo-triangle-drawer4 [model-mat-name]
+  (c/drawer [tr-vert-buf [:objs :tr-vert-buf]
+             tr-color-buf [:objs :tr-color-buf]
+             tr-buf-count [:objs :tr-buf-count]
+             tr-elem-buf [:objs :tr-elem-buf]
+             view-proj-mat [:objs :view-projection-mat]
+             model-mat [:objs model-mat-name]
+             t [:time]]
+    demo-render-pipeline2
+    [(c/buf-take tr-vert-buf :vec4 (c/size-of-type :vec4) 0)
+     (c/buf-take tr-color-buf :vec4 (c/size-of-type :vec4) 0)
+     ;(glm.mat4x4.Mat4. 1)
+     model-mat
+     view-proj-mat
+     (glm.mat4x4.Mat4. 1)
+     ;(+ 0.5 (/ (Math/sin (* 0.001 t)) 2))
+     1
+     1]
+    (c/draw-elements :triangles 0 tr-buf-count tr-elem-buf)))
+
+
+
+
 (defn init-fn [state]
   (let [model (load-obj-model "res/magnet.obj")
         ;_ (println "model loaded! here is the model as a clojure map:")
@@ -260,6 +333,8 @@
                                 (float Math/PI) 
                                 (glm.vec3.Vec3. 0 1 0)) 
                        1.5 1.5 1.5)
+        tr-elem-buf (c/buf [0 1 2 3 4 5])
+        _ (println "tr-elem-buf is: " tr-elem-buf)
         ] 
     ;(doall (map #(c/add-drawer! (create-obj-drawer %)) (:meshes model)))
     (reduce (fn [acc-state mesh-i] 
@@ -267,7 +342,10 @@
       (assoc 
         state
         :objs {:tr-buf (c/buf (c/load-value-to-array interleaved-data))
-               :tr-buf-count 3
+               :tr-vert-buf (c/buf (c/load-value-to-array positions))
+               :tr-color-buf (c/buf (c/load-value-to-array colors))
+               :tr-elem-buf tr-elem-buf
+               :tr-buf-count 6
                :meshes (:meshes model)
                :materials (:materials model)
                :view-projection-mat (glm.mat4x4.Mat4. 1)
@@ -293,7 +371,7 @@
                                  (float (/ (:width state) (:height state)))
                                  0.01
                                  100.0)
-        view-position [(* r (Math/cos t)) r (* r (Math/sin t))]
+        view-position [(* r (Math/cos t)) height (* r (Math/sin t))]
         view-mat (.lookAt glm.glm/INSTANCE 
                           (glm.vec3.Vec3. (* r (Math/cos t)) height (* r (Math/sin t))) ;eye pos
                           (glm.vec3.Vec3. 0 0 0)  ;center (where to look at)
@@ -310,7 +388,8 @@
   (c/add-update-fn! update-fn)
   ;(c/add-drawer! demo-triangle-drawer)
   (c/add-drawer! (demo-triangle-drawer2 :model-mat))
-  (c/add-drawer! (demo-triangle-drawer2 :model-mat-90))
+  ;(c/add-drawer! (demo-triangle-drawer3 :model-mat-90))
+  (c/add-drawer! (demo-triangle-drawer4 :model-mat-90))
   (c/start! init-fn)
   (println "fps stats:")
   (clojure.pprint/pprint (-> @c/global-state :internals :fps-stats))
