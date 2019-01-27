@@ -320,6 +320,74 @@
    :name "mul"
    :args args})
 
+(defn pow [n exp]
+  {:type :fn
+   :name "pow"
+   :n n
+   :exp exp})
+
+(defn vec2 [& args]
+  {:type :fn
+   :name "vec2"
+   :args args})
+
+(defn vec3 [& args]
+  {:type :fn
+   :name "vec3"
+   :args args})
+
+(defn vec4 [& args]
+  {:type :fn
+   :name "vec4"
+   :args args})
+
+(defn refract
+"For a given incident vector I, surface normal N and ratio of indices of refraction, eta, refract returns the refraction vector, R.
+
+R is calculated as:
+
+    k = 1.0 - eta * eta * (1.0 - dot(N, I) * dot(N, I));
+    if (k < 0.0)
+        R = genType(0.0);       // or genDType(0.0)
+    else
+        R = eta * I - (eta * dot(N, I) + sqrt(k)) * N;
+
+The input parameters I and N should be normalized in order to achieve the desired result. " 
+  [i n eta]
+  {:type :fn
+   :name "refract"
+   :i i
+   :n n
+   :eta eta})
+
+(defn dot 
+  "dot returns the dot product of two vectors, x and y. i.e., x[0]⋅y[0]+x[1]⋅y[1]+..."
+  [x y]
+  {:type :fn
+   :name "dot"
+   :x x
+   :y y})
+
+(defn max [& args]
+  {:type :fn
+   :name "max"
+   :args args})
+
+(defn normalize [arg]
+  {:type :fn
+   :name "normalize"
+   :arg arg})
+
+(defn reflect 
+"For a given incident vector I and surface normal N reflect returns the reflection direction calculated as I - 2.0 * dot(N, I) * N.
+
+N should be normalized in order to achieve the desired result. "
+  [i n]
+  {:type :fn
+   :name "reflect"
+   :i i
+   :n n})
+
 (defn reduce' [reduce-fn coll]
   {:type :fn
    :name "reduce"
@@ -725,7 +793,9 @@ just extend the protocol to your liking"
 
 ;OH GOD. i need seperate files for all this crap
 (defn interface-type-map [drawer init-state] 
-  (map convert-type ((:interface-fill drawer) init-state))) 
+  (let [interface-fill-fn (:interface-fill drawer)
+        interface-fill ((:interface-fill drawer) init-state)] 
+    (map convert-type interface-fill)))
 
 (defn interface-modifier-map [drawer init-state] 
   (map #(if (and (map? %) (= :buf-take (:name %))) :in :uniform) ((:interface-fill drawer) init-state))) 
@@ -777,6 +847,28 @@ just extend the protocol to your liking"
 
 (defmethod to-primitives "swizzle" [arg]
   (update arg :elem to-primitives))
+
+(defmethod to-primitives "refract" [arg]
+  (assoc arg
+         :i (to-primitives (:i arg))
+         :n (to-primitives (:n arg))
+         :eta (to-primitives (:eta arg))))
+
+(defmethod to-primitives "dot" [arg]
+  (assoc arg
+         :x (to-primitives (:x arg))
+         :y (to-primitives (:y arg))))
+
+(defmethod to-primitives "max" [arg]
+  (update arg :args to-primitives))
+
+(defmethod to-primitives "normalize" [arg]
+  (update arg :arg to-primitives))
+
+(defmethod to-primitives "reflect" [arg]
+  (assoc arg
+         :i (to-primitives (:i arg))
+         :n (to-primitives (:n arg))))
 
 (defmethod to-primitives "vertex-shader" [arg]
   (assoc arg
@@ -851,7 +943,6 @@ just extend the protocol to your liking"
 init-state (if (:custom-state arg) (:custom-state arg) @global-state)
 i-face-types (interface-type-map arg init-state)
 i-face-modifiers (interface-modifier-map arg init-state)
-
 pipe-interface (-> arg :pipe :pipeline-interface)
 v-shader-vardecs (-> arg :pipe :vertex-shader :vardecs)
 v-shader-bound-vars (-> arg :pipe :vertex-shader :bound-vars)
@@ -866,7 +957,6 @@ v-shader-manual-out-type-info (map (fn [elem]
 
 f-shader-vardecs (-> arg :pipe :fragment-shader :vardecs)
 f-shader-bound-vars (-> arg :pipe :fragment-shader :bound-vars)
-
 inputs (partition 3 3 (interleave pipe-interface i-face-types i-face-modifiers))
 
 vert-outs (map (fn [vardec] 
@@ -1140,8 +1230,65 @@ new-pipe (assoc-in
 (defmethod emit-form "mul" [arg]
   (clojure.string/join " * " (map #(str "(" (emit %) ")") (:args arg))))
 
+(defmethod emit-form "vec2" [arg]
+  (str "vec2(" 
+       (clojure.string/join 
+         "," (map #(str "(" (emit %) ")") (:args arg)))
+       ")"))
+
+(defmethod emit-form "vec3" [arg]
+  (str "vec3(" 
+       (clojure.string/join 
+         "," (map #(str "(" (emit %) ")") (:args arg)))
+       ")"))
+
+(defmethod emit-form "vec4" [arg]
+  (str "vec4(" 
+       (clojure.string/join 
+         "," (map #(str "(" (emit %) ")") (:args arg)))
+       ")"))
+
 (defmethod emit-form "swizzle" [arg]
   (str "(" (emit (:elem arg)) ")." (name (:swizzle-str arg))))
+
+(defmethod emit-form "refract" [arg]
+  (str "refract(" 
+       (emit (:i arg)) "," 
+       (emit (:n arg)) ","
+       (emit (:eta arg))")"))
+
+(defmethod emit-form "dot" [arg]
+  (str "dot(" 
+       (emit (:x arg)) "," 
+       (emit (:y arg)) ")"))
+(defn- create-max-tuples [coll]
+  (let [res (map 
+              (fn [[a b]] 
+                (str "max(" (emit a) "," (emit b) ")")) 
+              (partition 2 2 coll))] 
+    (if (= 0 (mod (count coll) 2)) 
+      res 
+      (conj res (last coll)))))
+(defn- max-emit [coll] 
+  (if (= (count coll) 1)
+    coll
+    (recur (create-max-tuples coll))))
+
+(defmethod emit-form "max" [arg]
+  (emit (max-emit (:args arg))))
+
+(defmethod emit-form "normalize" [arg]
+  (str "normalize(" (emit (:arg arg)) ")"))
+
+(defmethod emit-form "reflect" [arg]
+  (str "reflect(" 
+       (emit (:i arg)) "," 
+       (emit (:n arg)) ")"))
+
+(defmethod emit-form "pow" [arg]
+  (str "pow(" 
+       (emit (:n arg)) "," 
+       (emit (:exp arg)) ")"))
 
 (defmethod emit-form "sample" [arg]
   (str "texture(" (emit (:sampler arg)) ", " (emit (:texcoords arg)) ")" ))
@@ -1319,6 +1466,47 @@ new-pipe (assoc-in
                  (= mode :triangle-strip) GL_TRIANGLE_STRIP)] 
     (glDrawArrays glmode offset n)))
 
+(defn draw-elements
+  "draw n elements from an index-buffer with offset into it. 
+   Supports OpenGLs modes of Interpreting the buffer data.
+   (for example :triangles or :triangle-strip)"
+  [mode offset n element-buffer]
+  (let [glmode (cond
+                 (= mode :triangles) GL_TRIANGLES
+                 (= mode :triangle-strip) GL_TRIANGLE_STRIP)]
+    (glBindBuffer GL_ELEMENT_ARRAY_BUFFER element-buffer)
+    (glDrawElements glmode n GL_UNSIGNED_INT offset)))
+
+(defn multi-draw-elements
+  "draw n meshes with one draw call.
+   The element-buffer contains the indices of the vertex-data given
+   to the shaders via (buf-take ...)
+
+   offsets is a vector containing the offsets, where to start the nth
+   mesh in the element-buffer
+
+   counts is a vector containing the number of indices used from
+   offset onwards in the element-buffer.
+
+   This call is equivalent (but much faster) to:
+     (doall 
+       (map 
+         #(draw-elements mode (nth offsets %) (nth counts %) element-buffer) 
+         (range n)))
+
+   Supports OpenGLs modes of Interpreting the buffer data.
+   (for example :triangles or :triangle-strip)"
+  [mode n offsets counts element-buffer]
+  (let [glmode (cond
+                 (= mode :triangles) GL_TRIANGLES
+                 (= mode :triangle-strip) GL_TRIANGLE_STRIP)]
+    (glBindBuffer GL_ELEMENT_ARRAY_BUFFER element-buffer)
+    (glMultiDrawElements glmode 
+                         (into-array Integer/TYPE counts) 
+                         GL_UNSIGNED_INT 
+                         offsets
+                         n)))
+
 (defn texture-2d 
   "create 2D texture with as many mipmap levels as supported"
   [path]
@@ -1342,41 +1530,80 @@ new-pipe (assoc-in
         _ (org.lwjgl.stb.STBImage/stbi_image_free stbi-buf)]
     texid))
 
-(defn buf [coll]
-  (let [coll-t (type coll)
-        host-buf (cond
-                   (= coll-t float-array-type)
-                     (-> (BufferUtils/createFloatBuffer (count coll))
-                       (.put coll)
-                       (.flip))
-                   (= coll-t int-array-type)
-                     (-> (BufferUtils/createIntBuffer (count coll))
-                       (.put coll)
-                       (.flip))
-                   (= coll-t byte-array-type)
-                     (-> (BufferUtils/createByteBuffer (count coll))
-                       (.put coll)
-                       (.flip))
-                   (= coll-t double-array-type)
-                     (-> (BufferUtils/createDoubleBuffer (count coll))
-                       (.put coll)
-                       (.flip))
-                   (= coll-t short-array-type)
-                     (-> (BufferUtils/createShortBuffer (count coll))
-                       (.put coll)
-                       (.flip))
-                   :auieee (throw 
-                             (IllegalArgumentException. 
-                               (str "Wrong type to create buffer. 
-                                    Must be native array of 
-                                    bytes,ints,shorts,floats or doubles.
-                                    Type was:" coll-t))))
-        buf-obj-id (glGenBuffers)
-        _ (glBindBuffer GL_ARRAY_BUFFER buf-obj-id)
-        _ (glBufferData GL_ARRAY_BUFFER host-buf GL_STATIC_DRAW)
-        _ (glBindBuffer GL_ARRAY_BUFFER 0)
-        ]
-    buf-obj-id))
+(defn buf-wrap "slow buf" [coll]
+  (let [coll-t (type (first coll))
+        host-buf (cond 
+                   (= coll-t java.lang.Float)
+                     (let [b (BufferUtils/createFloatBuffer (count coll))
+                           _ (doall (map #(.put b (unchecked-float %)) coll))]
+                       b)
+                   (= coll-t java.lang.Long)
+                     (let [b (BufferUtils/createIntBuffer (count coll))
+                           _ (doall (map #(.put b (unchecked-int %)) coll))]
+                       b)
+                   (= coll-t java.lang.Integer)
+                     (let [b (BufferUtils/createIntBuffer (count coll))
+                           _ (doall (map #(.put b (unchecked-int %)) coll))]
+                       b)
+                   (= coll-t java.lang.Byte)
+                     (let [b (BufferUtils/createByteBuffer (count coll))
+                           _ (doall (map #(.put b (unchecked-byte %)) coll))]
+                       b)
+                   (= coll-t java.lang.Double)
+                     (let [b (BufferUtils/createDoubleBuffer (count coll))
+                           _ (doall (map #(.put b (unchecked-double %)) coll))]
+                       b)
+                   (= coll-t java.lang.Short)
+                     (let [b (BufferUtils/createShortBuffer (count coll))
+                           _ (doall (map #(.put b (unchecked-short %)) coll))]
+                       b))
+        _ (.flip host-buf)]
+    host-buf))
+
+(defn buf 
+  ([coll]
+    (let [coll-t (type coll)
+          host-buf (cond
+                     (instance? java.nio.Buffer coll) coll
+                     (= coll-t float-array-type)
+                       (-> (BufferUtils/createFloatBuffer (count coll))
+                         (.put coll)
+                         (.flip))
+                     (= coll-t int-array-type)
+                       (-> (BufferUtils/createIntBuffer (count coll))
+                         (.put coll)
+                         (.flip))
+                     (= coll-t byte-array-type)
+                       (-> (BufferUtils/createByteBuffer (count coll))
+                         (.put coll)
+                         (.flip))
+                     (= coll-t double-array-type)
+                       (-> (BufferUtils/createDoubleBuffer (count coll))
+                         (.put coll)
+                         (.flip))
+                     (= coll-t short-array-type)
+                       (-> (BufferUtils/createShortBuffer (count coll))
+                         (.put coll)
+                         (.flip))
+                     (sequential? coll) (buf-wrap coll)
+                     :auieee (throw 
+                               (IllegalArgumentException. 
+                                 (str "Wrong type to create buffer. 
+                                      Must be native array of 
+                                      bytes,ints,shorts,floats or doubles.
+                                      Slow, but working is anything that is sequential?
+                                      Type was:" coll-t))))
+          buf-obj-id (glGenBuffers)
+          _ (glBindBuffer GL_ARRAY_BUFFER buf-obj-id)
+          _ (glBufferData GL_ARRAY_BUFFER host-buf GL_STATIC_DRAW)
+          _ (glBindBuffer GL_ARRAY_BUFFER 0)]
+      buf-obj-id))
+  ([size address] 
+    (let [buf-obj-id (glGenBuffers)
+          _ (glBindBuffer GL_ARRAY_BUFFER buf-obj-id)
+          _ (nglBufferData GL_ARRAY_BUFFER size address GL_STATIC_DRAW)
+          _ (glBindBuffer GL_ARRAY_BUFFER 0)]
+      buf-obj-id)))
 
 ;state-change fns:
 (defn use-shader! [shadername state]
@@ -1400,6 +1627,21 @@ new-pipe (assoc-in
 
 (defn def-delayed-defs! []
   (doall (map #(%) (-> @global-state :internals :delayed-defs))))
+
+(defn add-drawer 
+  ([new-drawer state]
+    (let [generated-key (keyword (gensym "__drawer__"))] 
+      (update-in 
+        (assoc-in state [:internals :drawers generated-key] new-drawer) 
+        [:internals :not-compiled-drawers-keys] 
+        conj 
+        generated-key)))
+  ([new-drawer key state] 
+   (update-in 
+     (assoc-in state [:internals :drawers key] new-drawer) 
+     [:internals :not-compiled-drawers-keys] 
+     conj 
+     key)))
 
 (defn add-drawer!
   ([new-drawer]
@@ -1589,20 +1831,27 @@ new-pipe (assoc-in
         (update-with-context! true)
         (println "UPDATE...")
         (update!)
+
+        (println "init! returned:")
+        (pp window-handle)
         (println "STARTING UPDATE THREAD...")
         (.start update-thread)
         (println "ENTERING HOT LOOP...")
+        (glDisable GL_CULL_FACE)
+        (glEnable GL_DEPTH_TEST)
+        (glDepthFunc GL_LEQUAL)
         (while (not (glfwWindowShouldClose window-handle))
           (let [curr-t (System/nanoTime)] 
-            (if (> (- curr-t @start-t) 1000000)
+            (if (> (- curr-t @start-t) 1000000000)
               (do
-                (swap! global-state update-in [:internals :fps-stats] conj (- curr-t @start-t))
+                (swap! global-state update-in [:internals :fps-stats] conj @num-frames)
                 (var-set start-t curr-t)
                 (var-set num-frames 0))
               (var-set num-frames (inc @num-frames))))
           (update-with-context!)
           (glClear (bit-or GL_COLOR_BUFFER_BIT  GL_DEPTH_BUFFER_BIT))
-          (render!)
+          ;(glClearColor 128 128 128 128)
+          (render!) ; herer is nullpointer exception
           (glfwSwapBuffers window-handle)
           (glfwPollEvents))
         (println "REQUESTING UPDATE THREAD STOP...")
