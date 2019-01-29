@@ -754,7 +754,12 @@ just extend the protocol to your liking"
     (convert-type [o] (:glsl-type o))
     ;those are indirect values supplied by buffers or textures
     ;loading only makes sense for textures here. buffers are explicitly bound
-    (load-value-to-array [o] (:tex-id o)) ;doesn't actually return an array. Maybe rethink this protocols name?
+    (load-value-to-array [o] 
+      (cond 
+        (= :texture (:glsl-type o)) (:tex-id o)
+        (= :buffer-texture (:glsl-type o)) [(:tex-id o) (:buf-id o)])) 
+    ;load-value-to-array doesn't actually return an array. 
+    ;Maybe rethink this protocols name?
   Long 
     (convert-type [o] :int)
     (load-value-to-array [o] (let [arr (int-array 1)] (aset arr 0 o) arr))
@@ -907,6 +912,27 @@ just extend the protocol to your liking"
 (defn out-vardecs [vardecs]
   (filter (fn [v] (if (map? v) (= :out (:qualifier v)) false)) vardecs))
 
+(def glsl-type-to-image-format ; a one to one mapping. no fn needed.
+  {:float     GL_R32F
+   :byte      GL_R8I
+   :short     GL_R16I 	
+   :int       GL_R32I 	
+   :ubyte     GL_R8UI 	
+   :ushort    GL_R16UI
+   :uint      GL_R32UI
+   
+   :vec2      GL_RG32F
+   :ivec2     GL_RG32I
+   :uvec2     GL_RG32UI
+   
+   :vec3      GL_RGB32F
+   :ivec3     GL_RGB32I
+   :uvec3     GL_RGB32UI
+   
+   :vec4      GL_RGBA32F
+   :ivec4     GL_RGBA32I
+   :uvec4     GL_RGBA32UI}) 
+
 (defn uniform-fn-for-glsl-type [t]
   (cond
     (= :int t)   glUniform1iv
@@ -928,7 +954,18 @@ just extend the protocol to your liking"
     
     (= :sampler2D t) (fn [loc v] (glActiveTexture (+ GL_TEXTURE0 loc)) 
                                  (glBindTexture GL_TEXTURE_2D v) 
-                                 (glUniform1i loc loc))))
+                                 (glUniform1i loc loc))
+
+    (= :samplerBuffer t) 
+      (fn [loc [tex-id buf-id]] 
+        (glActiveTexture (+ GL_TEXTURE0 loc)) 
+        (glBindTexture GL_TEXTURE_BUFFER tex-id) 
+        (glTexBuffer GL_TEXTURE_BUFFER (glsl-type-to-image-format :RETURN_TYPE) buf-id) ;TODO: how to handle the return type?
+        ;maybe this should not be encoded into the typename (would be cleaner)
+        ;but then uniform-fn-for-glsl-type needs some breaking change (not just inputting t)
+        ;or: one could always use the "complicate the value" trick and pass in a map instead of just a lousy keyword and voila, if we have a map with :type samplerBuffer, we can get :return gvec
+        ;this is probably this least messy one, but not really "simple" as it breaks the convention for how this whole thing works right now
+        (glUniform1i loc loc))))
 
 ;since "primitives" are always emittable, we need to check the global state at this point
 ;so we can get an init state to have the drawer infer its arguments from.
@@ -1425,6 +1462,19 @@ new-pipe (assoc-in
      :stride 0
      :offset 0
      :glsl-type glsl-type}))
+
+(defn buf-as-texture
+  "create buffer-texture out of a buffer.
+   Meaning: use buffer buf-id as a random access array in your shader.
+   read them in the shader with the \"texel-fetch\" function
+   element-type is how the data from the buffer is to be read out.
+   element-type can be any shader type, like :int, :uint, :float, vec2, ivec4, etc.."
+  [buf-id element-type]
+  {:name :buffer-texture
+   :buf-id buf-id 
+   :tex-id (glGenTextures)
+   :element-type element-type
+   :glsl-type :buffer-texture})
 
 (defn texture-2d-take [texture-id] 
   {:name :texture-2d-take
