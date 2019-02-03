@@ -67,7 +67,7 @@
         meshcount (.mNumMeshes scene)
         _ (println "meshcount:" meshcount)
         ai-meshes (doall (map 
-                           #(org.lwjgl.assimp.AIMesh/create (.get (.mMeshes scene) %)) 
+                           #(org.lwjgl.assimp.AIMesh/createSafe (.get (.mMeshes scene) %)) 
                            (range meshcount)))
         _ (println "ai-meshes read in!")
         meshes (create-meshes ai-meshes)
