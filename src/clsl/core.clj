@@ -757,7 +757,7 @@ just extend the protocol to your liking"
     (load-value-to-array [o] 
       (cond 
         (= :texture (:glsl-type o)) (:tex-id o)
-        (= :buffer-texture (:glsl-type o)) [(:tex-id o) (:buf-id o)])) 
+        (= :buffer-texture (:name o)) [(:tex-id o) (:buf-id o)])) 
     ;load-value-to-array doesn't actually return an array. 
     ;Maybe rethink this protocols name?
   Long 
@@ -795,7 +795,6 @@ just extend the protocol to your liking"
      (aset arr 12 (.v30 o)) (aset arr 13 (.v31 o)) (aset arr 14 (.v32 o)) (aset arr 15 (.v33 o))
        arr))
   )
-
 ;OH GOD. i need seperate files for all this crap
 (defn interface-type-map [drawer init-state] 
   (let [interface-fill-fn (:interface-fill drawer)
@@ -972,14 +971,17 @@ just extend the protocol to your liking"
     (= :sampler2D t) (fn [loc v] (glActiveTexture (+ GL_TEXTURE0 loc)) 
                                  (glBindTexture GL_TEXTURE_2D v) 
                                  (glUniform1i loc loc))
-    (and (= type t java.lang.String) 
+    (and (= (type t) java.lang.String) 
          (.contains t "samplerBuffer")) 
            (fn [loc [tex-id buf-id]] 
              (glActiveTexture (+ GL_TEXTURE0 loc)) 
              (glBindTexture GL_TEXTURE_BUFFER tex-id) 
              (glTexBuffer 
                GL_TEXTURE_BUFFER (samplerBuffer-type-to-image-format t) buf-id)
-             (glUniform1i loc loc))))
+             (glUniform1i loc loc))
+    :default (throw (IllegalArgumentException. 
+                      (str "cannot create uniform-fn for glsl-type:\n" 
+                           (with-out-str (pp t)))))))
 
 ;since "primitives" are always emittable, we need to check the global state at this point
 ;so we can get an init state to have the drawer infer its arguments from.
@@ -1152,6 +1154,7 @@ exec-fn (let
                 (map-indexed #(list %2 (load-value-to-array 
                                       (nth curr-interface-fill (nth index-list %1)))) 
                                uniform-calls)
+
                 (glUseProgram (:program drawer))
                 (glBindVertexArray (:vao drawer))
                 (doall 
@@ -1828,6 +1831,11 @@ new-pipe (assoc-in
           _ (println "after init fn error state: " (glGetError))]
       res
       )))
+
+(defn stop&reset! []
+  (swap! global-state assoc :should-stop? true)
+  (Thread/sleep 500)
+  (reset-global-state!))
 
 (defn init-window! [height width title fullscreen? swapinterval]
   (let [errorCallback (GLFWErrorCallback/createPrint System/err)

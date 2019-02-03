@@ -99,7 +99,7 @@
 
 (def obj-frag-shader
   (c/fragment-shader [uLightPosition uViewPosition uAmbientColor
-                      uDiffuseColor uSpecularColor vPosition vNormal]
+                      uDiffuseColor uSpecularColor vPosition vNormal tex_buf]
     (let [ambientStrength  0.5
           diffuseStrength  0.5
           specularStrength 0.5
@@ -125,12 +125,13 @@
   (let [vert-out (c/shader-output obj-vert-shader)]
     (c/simple-pipeline [aVertex aNormal uModelMatrix uViewProjectionMatrix 
                         uNormalMatrix uLightPosition uViewPosition 
-                        uAmbientColor uDiffuseColor uSpecularColor]
+                        uAmbientColor uDiffuseColor uSpecularColor my_tex_buf]
       [(c/prime-shader obj-vert-shader 
          aVertex aNormal uModelMatrix uViewProjectionMatrix uNormalMatrix) 
        (c/prime-shader obj-frag-shader 
          uLightPosition uViewPosition uAmbientColor uDiffuseColor uSpecularColor 
-         (first vert-out) (second vert-out))])))
+         (first vert-out) (second vert-out)
+         my_tex_buf)])))
 
 ; --- DRAWER ---
 
@@ -140,7 +141,8 @@
              view-projection-mat [:objs :view-projection-mat]
              view-mat [:objs :view-mat]
              model-mat [:objs :model-mat]
-             normal-mat [:objs :normal-mat]]
+             normal-mat [:objs :normal-mat]
+             the-tex-buf [:objs :arbitrary-buffer-texture]]
     obj-render-pipeline
     [(c/buf-take (:vertices-buf mesh) :vec3 (c/size-of-type :vec3) 0)
      (c/buf-take (:normals-buf mesh) :vec3 (c/size-of-type :vec3) 0)
@@ -151,7 +153,10 @@
      view-position
      (:ambient-color (nth materials (:material-index mesh)))
      (:diffuse-color (nth materials (:material-index mesh)))
-     (:specular-color (nth materials (:material-index mesh)))]
+     (:specular-color (nth materials (:material-index mesh)))
+     the-tex-buf
+     ;1
+     ]
     (c/draw-elements :triangles 0 (:elem-count mesh) (:element-buf mesh))))
 
 (defn init-fn [state]
@@ -168,6 +173,9 @@
                :model-mat model-mat
                :normal-mat (.transpose (.inverse (glm.mat3x3.Mat3. model-mat)))
                :view-position [0 0 0]
+               :arbitrary-buffer-texture (c/buf-as-texture 
+                                           (:vertices-buf (first (:meshes model)))
+                                           :vec3)
                :fov 60
                :start-time (System/currentTimeMillis)}
         :time 0)
@@ -208,4 +216,6 @@
   "Demo completed. Global State has been reset!")
 
 (comment
-  (demo))
+  (demo)
+  (c/stop&reset!)
+  )
