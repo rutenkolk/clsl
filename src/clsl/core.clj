@@ -886,10 +886,9 @@ just extend the protocol to your liking"
          :i (to-primitives (:i arg))
          :n (to-primitives (:n arg))))
 
-(defmethod to-primitives "texel-fetch" [arg]
+(defmethod to-primitives "buffer-texel-fetch" [arg]
   (assoc arg
-         :sampler (to-primitives (:sampler arg)) ;no to-prim call here!
-                                 ;samplers must be written explicitly
+         :sampler (to-primitives (:sampler arg)) 
          :index (to-primitives (:index arg))))
 
 (defmethod to-primitives "vertex-shader" [arg]
