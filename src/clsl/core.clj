@@ -27,6 +27,9 @@
   (map #(macroexpand-n % s-expr) (range n))) 
 (defn macroexpand-readable-list [n s-expr]
   (interpose (apply str (repeat 80 "-")) (macroexpand-list n s-expr))) 
+(defn identity-println [v s]
+  (println s)
+  v)
 (defn all-public-class-methods [clz]
   (set 
     (org.reflections.ReflectionUtils/getAllMethods clz
@@ -377,6 +380,15 @@ The input parameters I and N should be normalized in order to achieve the desire
   {:type :fn
    :name "normalize"
    :arg arg})
+
+(defn buffer-texel-fetch 
+  "fetch specific texel (value) from buffer-texture"
+  [sampler type index]
+  {:type :fn
+   :name "buffer-texel-fetch"
+   :sampler sampler
+   :fetch-type type
+   :index index})
 
 (defn reflect 
 "For a given incident vector I and surface normal N reflect returns the reflection direction calculated as I - 2.0 * dot(N, I) * N.
@@ -874,6 +886,12 @@ just extend the protocol to your liking"
          :i (to-primitives (:i arg))
          :n (to-primitives (:n arg))))
 
+(defmethod to-primitives "texel-fetch" [arg]
+  (assoc arg
+         :sampler (to-primitives (:sampler arg)) ;no to-prim call here!
+                                 ;samplers must be written explicitly
+         :index (to-primitives (:index arg))))
+
 (defmethod to-primitives "vertex-shader" [arg]
   (assoc arg
          :vardecs (vec
@@ -1346,6 +1364,15 @@ new-pipe (assoc-in
 
 (defmethod emit-form "sample" [arg]
   (str "texture(" (emit (:sampler arg)) ", " (emit (:texcoords arg)) ")" ))
+
+(defmethod emit-form "buffer-texel-fetch" [arg]
+  (str "texelFetch(" (emit (:sampler arg)) ", " (emit (:index arg)) ")."
+      (cond
+        (.contains (name (:fetch-type arg)) "vec4") "rgba"
+        (.contains (name (:fetch-type arg)) "vec3") "rgb"
+        (.contains (name (:fetch-type arg)) "vec2") "rg"
+        :else "r"))
+  )
 
 (defmethod emit-form "div" [arg]
   (clojure.string/join " / " (map #(str "(" (emit %) ")") (:args arg))))
