@@ -914,11 +914,11 @@ just extend the protocol to your liking"
 
 (def glsl-type-to-image-format ; a one to one mapping. no fn needed.
   {:float     GL_R32F
-   :byte      GL_R8I
-   :short     GL_R16I 	
+   ;:byte      GL_R8I
+   ;:short     GL_R16I 	
    :int       GL_R32I 	
-   :ubyte     GL_R8UI 	
-   :ushort    GL_R16UI
+   ;:ubyte     GL_R8UI 	
+   ;:ushort    GL_R16UI
    :uint      GL_R32UI
    
    :vec2      GL_RG32F
@@ -932,6 +932,23 @@ just extend the protocol to your liking"
    :vec4      GL_RGBA32F
    :ivec4     GL_RGBA32I
    :uvec4     GL_RGBA32UI}) 
+
+(def samplerBuffer-type-to-image-format
+  {"samplerBuffer"     (glsl-type-to-image-format :float)
+   "isamplerBuffer"    (glsl-type-to-image-format :int)
+   "usamplerBuffer"    (glsl-type-to-image-format :uint)
+
+   "samplerBuffer "    (glsl-type-to-image-format :vec2)
+   "isamplerBuffer "   (glsl-type-to-image-format :ivec2)
+   "usamplerBuffer "   (glsl-type-to-image-format :uvec2)
+
+   "samplerBuffer  "   (glsl-type-to-image-format :vec3)
+   "isamplerBuffer  "  (glsl-type-to-image-format :ivec3)
+   "usamplerBuffer  "  (glsl-type-to-image-format :uvec3)
+
+   "samplerBuffer   "  (glsl-type-to-image-format :vec4)
+   "isamplerBuffer   " (glsl-type-to-image-format :ivec4) 
+   "usamplerBuffer   " (glsl-type-to-image-format :uvec4)})
 
 (defn uniform-fn-for-glsl-type [t]
   (cond
@@ -955,17 +972,14 @@ just extend the protocol to your liking"
     (= :sampler2D t) (fn [loc v] (glActiveTexture (+ GL_TEXTURE0 loc)) 
                                  (glBindTexture GL_TEXTURE_2D v) 
                                  (glUniform1i loc loc))
-
-    (= :samplerBuffer t) 
-      (fn [loc [tex-id buf-id]] 
-        (glActiveTexture (+ GL_TEXTURE0 loc)) 
-        (glBindTexture GL_TEXTURE_BUFFER tex-id) 
-        (glTexBuffer GL_TEXTURE_BUFFER (glsl-type-to-image-format :RETURN_TYPE) buf-id) ;TODO: how to handle the return type?
-        ;maybe this should not be encoded into the typename (would be cleaner)
-        ;but then uniform-fn-for-glsl-type needs some breaking change (not just inputting t)
-        ;or: one could always use the "complicate the value" trick and pass in a map instead of just a lousy keyword and voila, if we have a map with :type samplerBuffer, we can get :return gvec
-        ;this is probably this least messy one, but not really "simple" as it breaks the convention for how this whole thing works right now
-        (glUniform1i loc loc))))
+    (and (= type t java.lang.String) 
+         (.contains t "samplerBuffer")) 
+           (fn [loc [tex-id buf-id]] 
+             (glActiveTexture (+ GL_TEXTURE0 loc)) 
+             (glBindTexture GL_TEXTURE_BUFFER tex-id) 
+             (glTexBuffer 
+               GL_TEXTURE_BUFFER (samplerBuffer-type-to-image-format t) buf-id)
+             (glUniform1i loc loc))))
 
 ;since "primitives" are always emittable, we need to check the global state at this point
 ;so we can get an init state to have the drawer infer its arguments from.
@@ -1463,6 +1477,23 @@ new-pipe (assoc-in
      :offset 0
      :glsl-type glsl-type}))
 
+(def element-type-to-samplerBuffer-type
+  {:float "samplerBuffer"
+   :int   "isamplerBuffer"
+   :uint  "usamplerBuffer"
+
+   :vec2  "samplerBuffer "
+   :ivec2 "isamplerBuffer "
+   :uvec2 "usamplerBuffer "
+
+   :vec3  "samplerBuffer  "
+   :ivec3 "isamplerBuffer  "
+   :uvec3 "usamplerBuffer  "
+
+   :vec4  "samplerBuffer   "
+   :ivec4 "isamplerBuffer   "
+   :uvec4 "usamplerBuffer   "})
+
 (defn buf-as-texture
   "create buffer-texture out of a buffer.
    Meaning: use buffer buf-id as a random access array in your shader.
@@ -1474,7 +1505,7 @@ new-pipe (assoc-in
    :buf-id buf-id 
    :tex-id (glGenTextures)
    :element-type element-type
-   :glsl-type :buffer-texture})
+   :glsl-type (element-type-to-samplerBuffer-type element-type)})
 
 (defn texture-2d-take [texture-id] 
   {:name :texture-2d-take
