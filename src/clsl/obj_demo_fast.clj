@@ -6,28 +6,57 @@
 ;https://github.com/LWJGL/lwjgl3-demos/blob/master/src/org/lwjgl/demo/opengl/assimp/WavefrontObjDemo.java
 
 ;optimized version using texture buffers
+(defn partial-reduce-list [coll fn] 
+  (map (partial reduce fn) (map #(take (inc %) coll) (range (count coll)))))
 
 (defn create-meshes [ai-meshes]
   (doall 
-  (for [mesh ai-meshes] 
-    (let [vertices-buf (c/buf 
-                         (* org.lwjgl.assimp.AIVector3D/SIZEOF (.remaining (.mVertices mesh))) 
-                         (.address (.mVertices mesh)))
-          normals-buf (c/buf 
-                        (* org.lwjgl.assimp.AIVector3D/SIZEOF (.remaining (.mNormals mesh))) 
-                        (.address (.mNormals mesh)))
-          elem-count (* 3 (.mNumFaces mesh))
-          faces (.mFaces mesh)
-          elems (doall (map #(.mIndices (.get faces %)) (range (.mNumFaces mesh))))
-          elems-host-buf (org.lwjgl.BufferUtils/createIntBuffer elem-count)
-          _ (doall (map #(.put elems-host-buf %) elems))
-          _ (.flip elems-host-buf)
-          elem-buf (c/buf elems-host-buf)]
-      {:vertices-buf vertices-buf
-       :normals-buf normals-buf
-       :element-buf elem-buf
-       :material-index (.mMaterialIndex mesh)
-       :elem-count elem-count}))))
+    (for [mesh ai-meshes] 
+      (let [vertices (for [vert (.mVertices mesh)] 
+                       [(.x vert) (.y vert) (.z vert)])
+            normals (for [normal (.mNormals mesh)] 
+                      [(.x normal) (.y normal) (.z normal)])
+            
+            elem-count (* 3 (.mNumFaces mesh))
+            faces (.mFaces mesh)
+            elems (doall (map #(.mIndices (.get faces %)) (range (.mNumFaces mesh))))] 
+        {:vertices vertices
+         :normals normals
+         :elements elems
+         :material-index (.mMaterialIndex mesh)
+         :elem-count elem-count}))))
+
+(defn fuse-meshes 
+  "fuse meshes. append all vertices/normals. 
+  appends all elements, but shifted, so that they still are valid indices.
+  " 
+  [meshes]
+  (let [vertices-counts (map (comp count :vertices) meshes)
+        vertices-buf (c/buf (flatten (map :vertices meshes)))
+        normals-buf (c/buf (flatten (map :normals meshes)))
+        elem-offsets (partial-reduce-list vertices-counts +)
+        elements-corrected (map-indexed 
+                             (fn [off v] (map (partial + off) v)) 
+                             (:elements meshes))
+        elements-buf (c/buf (flatten elements-corrected))
+        materials-index-buf (c/buf 
+                              (flatten
+                                (map
+                                  (fn [[ind n]] (repeat n ind))
+                                  (partition 2 
+                                    (interleave 
+                                      (map :materials-index meshes) 
+                                      vertices-counts)))))]
+    {:vertices-buf vertices-buf
+     :normals-buf normals-buf
+     :elements-buf elements-buf
+     :material-index-buf materials-index-buf
+     :element-count (reduce + (map :elem-count meshes))})
+;          elems-host-buf (org.lwjgl.BufferUtils/createIntBuffer elem-count)
+;          _ (doall (map #(.put elems-host-buf %) elems))
+;          _ (.flip elems-host-buf)
+;          elem-buf (c/buf elems-host-buf)
+  )
 
 (defn create-materials [ai-materials]
   (doall
@@ -73,6 +102,7 @@
                            (range meshcount)))
         _ (println "ai-meshes read in!")
         meshes (create-meshes ai-meshes)
+        fused-mesh (fuse-meshes meshes)
         _ (println "meshes created!")
         _ (println "materialcount" (.mNumMaterials scene))
         raw-materials (map #(.get (.mMaterials scene) %) (range (.mNumMaterials scene)))
@@ -88,7 +118,10 @@
         _ (println "loading model finished.")
         _ (println "Assimp error String:" (org.lwjgl.assimp.Assimp/aiGetErrorString))
         _ (org.lwjgl.assimp.Assimp/aiReleaseImport scene)]
-    {:meshes meshes
+    {:vertices-buf (:vertices-buf fused-mesh)
+     :normals-buf (:normals-buf fused-mesh)
+     :elements-buf (:elements-buf fused-mesh)
+     :element-count (:element-count fused-mesh)
      :materials materials
      :materials-buf-texture  materials-buf-tex}))
 
@@ -162,15 +195,13 @@
      [-5 5 5]
      view-position
      material-tex
-     (:material-index mesh)]
-    (c/draw-elements :triangles 0 (:elem-count mesh) (:element-buf mesh))))
+     (c/buf-take (:material-index-buf mesh) :int (c/size-of-type :int) 0)]
+    (c/draw-elements :triangles 0 (:element-count mesh) (:element-buf mesh))))
 
 (defn init-fn [state]
   (let [model (load-obj-model "res/magnet.obj")
         model-mat (glm.mat4x4.Mat4. 1)]
-    (reduce 
-      (fn [acc-state mesh-i] 
-        (c/add-drawer (create-obj-drawer mesh-i) acc-state)) 
+    (c/add-drawer (create-obj-drawer model)  
       (assoc state
         :objs {:meshes (:meshes model)
                :materials (:materials model)
@@ -182,8 +213,8 @@
                :view-position [0 0 0]
                :fov 60
                :start-time (System/currentTimeMillis)}
-        :time 0)
-      (:meshes model))))
+        :time 0))
+      (:meshes model)))
 
 (defn update-fn [state]
   (let [new-t (- (System/currentTimeMillis) (-> state :objs :start-time)) 
