@@ -772,6 +772,9 @@ just extend the protocol to your liking"
         (= :buffer-texture (:name o)) [(:tex-id o) (:buf-id o)])) 
     ;load-value-to-array doesn't actually return an array. 
     ;Maybe rethink this protocols name?
+  Integer
+    (convert-type [o] :int)
+    (load-value-to-array [o] (let [arr (int-array 1)] (aset arr 0 o) arr))
   Long 
     (convert-type [o] :int)
     (load-value-to-array [o] (let [arr (int-array 1)] (aset arr 0 o) arr))
@@ -807,11 +810,18 @@ just extend the protocol to your liking"
      (aset arr 12 (.v30 o)) (aset arr 13 (.v31 o)) (aset arr 14 (.v32 o)) (aset arr 15 (.v33 o))
        arr))
   )
+
 ;OH GOD. i need seperate files for all this crap
 (defn interface-type-map [drawer init-state] 
   (let [interface-fill-fn (:interface-fill drawer)
         interface-fill ((:interface-fill drawer) init-state)] 
-    (map convert-type interface-fill)))
+    (try 
+      (map convert-type interface-fill)
+      (catch Exception e 
+        (str 
+          "could not convert pipeline interface to appropriate types:\n" 
+          (.getMessage e) "\ninterface-fill content is:"
+          (with-out-str (pp interface-fill)))))))
 
 (defn interface-modifier-map [drawer init-state] 
   (map #(if (and (map? %) (= :buf-take (:name %))) :in :uniform) ((:interface-fill drawer) init-state))) 
