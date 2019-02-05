@@ -2,12 +2,13 @@
  (:require [clsl.basic-demos :as basic])
  (:require [clsl.textured-demos :as texture])
  (:require [clsl.obj-demo :as obj])
+ (:require [clsl.obj-demo-fast :as obj-fast])
  (:gen-class))
 
 (def demos
   [basic/demo1 basic/demo2 basic/demo3
    texture/demo (partial texture/demo2 3)
-   obj/demo])
+   obj/demo obj-fast/demo])
 
 (defn all-demos! []
   (doall (map #(%) demos)))
@@ -18,6 +19,7 @@
   ((nth demos 1))
   ((nth demos 2))
   ...
+  (texture/demo)
   (all-demos!)) 
 
 (defn -main [& args]
