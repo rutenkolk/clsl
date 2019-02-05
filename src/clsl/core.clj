@@ -1387,16 +1387,16 @@ new-pipe (assoc-in
   (clojure.string/join " / " (map #(str "(" (emit %) ")") (:args arg))))
 
 (defmethod emit-form "cast-to-float" [arg]
-  (str "((float) " (emit (:args arg)) ")"))
+  (str "float( " (emit (:args arg)) ")"))
 
 (defmethod emit-form "cast-to-int" [arg]
-  (str "((int) " (emit (:args arg)) ")"))
+  (str "int( " (emit (:args arg)) ")"))
 
 (defmethod emit-form "cast-to-uint" [arg]
-  (str "((uint) " (emit (:args arg)) ")"))
+  (str "uint( " (emit (:args arg)) ")"))
 
 (defmethod emit-form "cast-to-bool" [arg]
-  (str "((bool) " (emit (:args arg)) ")"))
+  (str "bool( " (emit (:args arg)) ")"))
 
 (defmethod emit-form "varref" [arg]
   (str (:var-name arg)))

@@ -19,7 +19,15 @@
             
             elem-count (* 3 (.mNumFaces mesh))
             faces (.mFaces mesh)
-            elems (doall (map #(.mIndices (.get faces %)) (range (.mNumFaces mesh))))] 
+            elem-buffers (flatten
+                           (doall 
+                             (map #(.mIndices (.get faces %)) 
+                                  (range (.mNumFaces mesh)))))
+            elems (flatten
+                    (for [triangle-elems elem-buffers] 
+                      [(.get triangle-elems 0) 
+                       (.get triangle-elems 1) 
+                       (.get triangle-elems 2)]))] 
         {:vertices vertices
          :normals normals
          :elements elems
@@ -37,7 +45,7 @@
         elem-offsets (partial-reduce-list vertices-counts +)
         elements-corrected (map-indexed 
                              (fn [off v] (map (partial + off) v)) 
-                             (:elements meshes))
+                             (map :elements meshes))
         elements-buf (c/buf (flatten elements-corrected))
         materials-index-buf (c/buf 
                               (flatten
@@ -45,7 +53,7 @@
                                   (fn [[ind n]] (repeat n ind))
                                   (partition 2 
                                     (interleave 
-                                      (map :materials-index meshes) 
+                                      (map :material-index meshes) 
                                       vertices-counts)))))]
     {:vertices-buf vertices-buf
      :normals-buf normals-buf
@@ -102,8 +110,9 @@
                            (range meshcount)))
         _ (println "ai-meshes read in!")
         meshes (create-meshes ai-meshes)
-        fused-mesh (fuse-meshes meshes)
         _ (println "meshes created!")
+        fused-mesh (fuse-meshes meshes)
+        _ (println "meshes fused!")
         _ (println "materialcount" (.mNumMaterials scene))
         raw-materials (map #(.get (.mMaterials scene) %) (range (.mNumMaterials scene)))
         _ (clojure.pprint/pprint raw-materials)
@@ -128,19 +137,22 @@
 ; --- SHADERS ---
 
 (def obj-vert-shader
-  (c/vertex-shader [aVertex aNormal uModelMatrix uViewProjectionMatrix uNormalMatrix]
+  (c/vertex-shader [aVertex aNormal material_index 
+                    uModelMatrix uViewProjectionMatrix uNormalMatrix]
     [(c/mul uViewProjectionMatrix uModelMatrix (c/vec4 aVertex 1))
      (c/typed :vec3 (c/swizzle (c/mul uModelMatrix (c/vec4 aVertex 1)) :xyz))
-     (c/typed :vec3 (c/mul uNormalMatrix aNormal))]))
+     (c/typed :vec3 (c/mul uNormalMatrix aNormal))
+     (c/typed :float material_index)]))
 
 (def obj-frag-shader
   (c/fragment-shader [uLightPosition uViewPosition 
                       ;uAmbientColor uDiffuseColor uSpecularColor 
-                      vPosition vNormal material_tex_buf material_index]
+                      vPosition vNormal material_tex_buf material_index_float]
     (let [ambientStrength  0.5
           diffuseStrength  0.5
           specularStrength 0.5
           shininess        4.0
+          material_index (c/cast-to-int material_index_float)
           uAmbientColor    (c/buffer-texel-fetch 
                              material_tex_buf :vec3 (c/add (c/mul material_index 3) 0))
           uDiffuseColor    (c/buffer-texel-fetch 
@@ -170,16 +182,17 @@
                         uNormalMatrix uLightPosition uViewPosition 
                         mat_tex_buf mat_ind]
       [(c/prime-shader obj-vert-shader 
-         aVertex aNormal uModelMatrix uViewProjectionMatrix uNormalMatrix) 
+         aVertex aNormal mat_ind uModelMatrix uViewProjectionMatrix uNormalMatrix) 
        (c/prime-shader obj-frag-shader 
          uLightPosition uViewPosition 
          (first vert-out) (second vert-out)
-         mat_tex_buf mat_ind)])))
+         mat_tex_buf (second (rest vert-out)))])))
 
 ; --- DRAWER ---
 
-(defn create-obj-drawer [mesh] 
-  (c/drawer [materials [:objs :materials] 
+(defn create-obj-drawer []
+  (c/drawer [mesh [:objs :model]
+             materials [:objs :materials] 
              view-position [:objs :view-position]
              view-projection-mat [:objs :view-projection-mat]
              view-mat [:objs :view-mat]
@@ -201,9 +214,8 @@
 (defn init-fn [state]
   (let [model (load-obj-model "res/magnet.obj")
         model-mat (glm.mat4x4.Mat4. 1)]
-    (c/add-drawer (create-obj-drawer model)  
       (assoc state
-        :objs {:meshes (:meshes model)
+        :objs {:model model
                :materials (:materials model)
                :materials-buf-texture (:materials-buf-texture model)
                :view-projection-mat (glm.mat4x4.Mat4. 1)
@@ -213,8 +225,7 @@
                :view-position [0 0 0]
                :fov 60
                :start-time (System/currentTimeMillis)}
-        :time 0))
-      (:meshes model)))
+        :time 0)))
 
 (defn update-fn [state]
   (let [new-t (- (System/currentTimeMillis) (-> state :objs :start-time)) 
@@ -244,6 +255,7 @@
 
 (defn demo []
   (c/add-update-fn! update-fn)
+  (c/add-drawer! (create-obj-drawer))
   (c/start! init-fn)
   (println "fps stats:")
   (clojure.pprint/pprint (-> @c/global-state :internals :fps-stats))
