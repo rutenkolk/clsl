@@ -16,7 +16,6 @@
                        [(.x vert) (.y vert) (.z vert)])
             normals (for [normal (.mNormals mesh)] 
                       [(.x normal) (.y normal) (.z normal)])
-            
             elem-count (* 3 (.mNumFaces mesh))
             faces (.mFaces mesh)
             elem-buffers (flatten
@@ -36,8 +35,7 @@
 
 (defn fuse-meshes 
   "fuse meshes. append all vertices/normals. 
-  appends all elements, but shifted, so that they still are valid indices.
-  " 
+  appends all elements, but shifted, so that they still are valid indices." 
   [meshes]
   (let [vertices-counts (map (comp count :vertices) meshes)
         vertices-buf (c/buf (flatten (map :vertices meshes)))
@@ -45,9 +43,8 @@
         elem-offsets (partial-reduce-list (drop-last (cons 0 vertices-counts)) +)
         elements-corrected (map 
                              (fn [[v off]] (map (partial + off) v)) 
-                             (partition 2 
-                                        (interleave (map :elements meshes) 
-                                                    elem-offsets)))
+                             (partition 2 (interleave (map :elements meshes) 
+                                                      elem-offsets)))
         elements-buf (c/buf (flatten elements-corrected))
         materials-index-buf (c/buf 
                               (flatten
@@ -144,7 +141,6 @@
 
 (def obj-frag-shader
   (c/fragment-shader [uLightPosition uViewPosition 
-                      ;uAmbientColor uDiffuseColor uSpecularColor 
                       vPosition vNormal material_tex_buf material_index_float]
     (let [ambientStrength  0.5
           diffuseStrength  0.5
@@ -206,8 +202,8 @@
      [-5 5 5]
      view-position
      material-tex
-     (c/buf-take (:material-index-buf mesh) :int (c/size-of-type :int) 0)]
-    (c/draw-elements :triangles 0 (:element-count mesh) (:elements-buf mesh))))
+     (c/buf-take (:material-index-buf mesh) :int (c/size-of-type :int) 0)] 
+    (c/draw-elements :triangles 0 (:element-count mesh) (:elements-buf mesh)))) 
 
 (defn init-fn [state]
   (let [model (load-obj-model "res/magnet.obj")
