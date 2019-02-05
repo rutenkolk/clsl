@@ -775,7 +775,7 @@ just extend the protocol to your liking"
     ;loading only makes sense for textures here. buffers are explicitly bound
     (load-value-to-array [o] 
       (cond 
-        (= :texture (:glsl-type o)) (:tex-id o)
+        (= :sampler2D (:glsl-type o)) (:tex-id o)
         (= :buffer-texture (:name o)) [(:tex-id o) (:buf-id o)])) 
     ;load-value-to-array doesn't actually return an array. 
     ;Maybe rethink this protocols name?
@@ -1201,7 +1201,6 @@ exec-fn (let
                 (map-indexed #(list %2 (load-value-to-array 
                                       (nth curr-interface-fill (nth index-list %1)))) 
                                uniform-calls)
-
                 (glUseProgram (:program drawer))
                 (glBindVertexArray (:vao drawer))
                 (doall 
