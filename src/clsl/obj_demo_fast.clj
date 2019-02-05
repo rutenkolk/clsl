@@ -42,10 +42,12 @@
   (let [vertices-counts (map (comp count :vertices) meshes)
         vertices-buf (c/buf (flatten (map :vertices meshes)))
         normals-buf (c/buf (flatten (map :normals meshes)))
-        elem-offsets (partial-reduce-list vertices-counts +)
-        elements-corrected (map-indexed 
-                             (fn [off v] (map (partial + off) v)) 
-                             (map :elements meshes))
+        elem-offsets (partial-reduce-list (drop-last (cons 0 vertices-counts)) +)
+        elements-corrected (map 
+                             (fn [[v off]] (map (partial + off) v)) 
+                             (partition 2 
+                                        (interleave (map :elements meshes) 
+                                                    elem-offsets)))
         elements-buf (c/buf (flatten elements-corrected))
         materials-index-buf (c/buf 
                               (flatten
@@ -131,6 +133,7 @@
      :normals-buf (:normals-buf fused-mesh)
      :elements-buf (:elements-buf fused-mesh)
      :element-count (:element-count fused-mesh)
+     :material-index-buf (:material-index-buf fused-mesh)
      :materials materials
      :materials-buf-texture  materials-buf-tex}))
 
@@ -172,7 +175,9 @@
                                      0.0) 
                                    shininess)
           specularColor (c/mul specularStrength reflect-intensity uSpecularColor)]
-      (c/vec4 (c/add ambientColor diffuseColor specularColor) 1.0))))
+      (c/vec4 (c/add ambientColor diffuseColor specularColor) 1.0)
+      (c/vec4 1.0 1.0 1.0 1.0)
+      )))
 
 ; --- PIPELINE ---
 
@@ -209,7 +214,7 @@
      view-position
      material-tex
      (c/buf-take (:material-index-buf mesh) :int (c/size-of-type :int) 0)]
-    (c/draw-elements :triangles 0 (:element-count mesh) (:element-buf mesh))))
+    (c/draw-elements :triangles 0 (:element-count mesh) (:elements-buf mesh))))
 
 (defn init-fn [state]
   (let [model (load-obj-model "res/magnet.obj")
