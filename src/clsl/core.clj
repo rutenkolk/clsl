@@ -426,6 +426,13 @@ N should be normalized in order to achieve the desired result. "
    :name "cast-to-bool"
    :args args})
 
+(defn round
+ "round returns a value equal to the nearest integer to x. The fraction 0.5 will round in a direction chosen by the implementation, presumably the direction that is fastest. This includes the possibility that round(x) returns the same value as roundEven(x) for all values of x."
+  [args]
+  {:type :fn
+   :name "round"
+   :args args})
+
 (defn defvar 
   ([var-name var-type]
     {:type :construct
@@ -856,6 +863,9 @@ just extend the protocol to your liking"
      (for-loop 0 (sizeof (:coll arg)) index 
                (assign res ((:reduce-fn arg) res (read-at (:coll arg) index))))]))
 
+(defmethod to-primitives "round" [arg]
+  (update arg :args to-primitives))
+
 (defmethod to-primitives "sample" [arg]
   (update arg :texcoords to-primitives))
 
@@ -1151,20 +1161,30 @@ init-fn (fn [drawer]
                        GL_ARRAY_BUFFER 
                        (:buf-id (nth i-in-fill i)))
                      (glEnableVertexAttribArray (:layout i-var))
-                     (glVertexAttribPointer 
-                       ;layout location
-                       (:layout i-var)
-                       ;num-elements
-                       (first (glsl-keyword-type-to-num-and-elem-type (:type i-var)))
-                       ;GL_TYPE
-                       (second (glsl-keyword-type-to-num-and-elem-type 
-                         (:type i-var)))
-                       ;normalized? (no support for this)
-                       false 
-                       ;stride
-                       (:stride (nth i-in-fill i))
-                       ;extra offset to buf
-                       (:offset (nth i-in-fill i)))))]
+                      
+                     (cond
+                       (or (= (:type i-var) :int)
+                           (= (:type i-var) :uint)
+                           (= (:type i-var) :short)
+                           (= (:type i-var) :byte)) 
+                       (glVertexAttribIPointer 
+                         (:layout i-var) ;layout location 
+                         (first (glsl-keyword-type-to-num-and-elem-type 
+                                  (:type i-var))) ;num-elements
+                         (second (glsl-keyword-type-to-num-and-elem-type 
+                                  (:type i-var))) ;GL_TYPE
+                         (:stride (nth i-in-fill i)) ;stride
+                         (:offset (nth i-in-fill i))) ;extra offset to buf
+                       :default
+                       (glVertexAttribPointer 
+                         (:layout i-var) ;layout location
+                         (first (glsl-keyword-type-to-num-and-elem-type 
+                                  (:type i-var))) ;num-elements
+                         (second (glsl-keyword-type-to-num-and-elem-type 
+                                  (:type i-var))) ;GL_TYPE
+                       false ;normalized? (no support for this)
+                       (:stride (nth i-in-fill i)) ;stride
+                       (:offset (nth i-in-fill i))))))] ;extra offset to buf 
                (assoc drawer :vao vao-id)))
 exec-fn (let 
           [uniform-calls (for [[layout interface-index] 
@@ -1385,6 +1405,9 @@ new-pipe (assoc-in
 
 (defmethod emit-form "div" [arg]
   (clojure.string/join " / " (map #(str "(" (emit %) ")") (:args arg))))
+
+(defmethod emit-form "round" [arg]
+  (str "round(" (emit (:args arg)) ")"))
 
 (defmethod emit-form "cast-to-float" [arg]
   (str "float( " (emit (:args arg)) ")"))
@@ -1650,8 +1673,9 @@ new-pipe (assoc-in
         _ (org.lwjgl.stb.STBImage/stbi_image_free stbi-buf)]
     texid))
 
-(defn buf-wrap "slow buf" [coll]
+(defn buf-wrap "slower buf fallback" [coll]
   (let [coll-t (type (first coll))
+        _ (println "buf-wrap:" (type (first coll)))
         host-buf (cond 
                    (= coll-t java.lang.Float)
                      (let [b (BufferUtils/createFloatBuffer (count coll))
@@ -1670,8 +1694,8 @@ new-pipe (assoc-in
                            _ (doall (map #(.put b (unchecked-byte %)) coll))]
                        b)
                    (= coll-t java.lang.Double)
-                     (let [b (BufferUtils/createDoubleBuffer (count coll))
-                           _ (doall (map #(.put b (unchecked-double %)) coll))]
+                     (let [b (BufferUtils/createFloatBuffer (count coll))
+                           _ (doall (map #(.put b (unchecked-float %)) coll))]
                        b)
                    (= coll-t java.lang.Short)
                      (let [b (BufferUtils/createShortBuffer (count coll))

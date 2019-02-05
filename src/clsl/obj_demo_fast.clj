@@ -61,12 +61,7 @@
      :normals-buf normals-buf
      :elements-buf elements-buf
      :material-index-buf materials-index-buf
-     :element-count (reduce + (map :elem-count meshes))})
-;          elems-host-buf (org.lwjgl.BufferUtils/createIntBuffer elem-count)
-;          _ (doall (map #(.put elems-host-buf %) elems))
-;          _ (.flip elems-host-buf)
-;          elem-buf (c/buf elems-host-buf)
-  )
+     :element-count (reduce + (map :elem-count meshes))}))
 
 (defn create-materials [ai-materials]
   (doall
@@ -145,7 +140,7 @@
     [(c/mul uViewProjectionMatrix uModelMatrix (c/vec4 aVertex 1))
      (c/typed :vec3 (c/swizzle (c/mul uModelMatrix (c/vec4 aVertex 1)) :xyz))
      (c/typed :vec3 (c/mul uNormalMatrix aNormal))
-     (c/typed :float material_index)]))
+     (c/typed :float (c/cast-to-float material_index))]))
 
 (def obj-frag-shader
   (c/fragment-shader [uLightPosition uViewPosition 
@@ -155,12 +150,12 @@
           diffuseStrength  0.5
           specularStrength 0.5
           shininess        4.0
-          material_index (c/cast-to-int material_index_float)
-          uAmbientColor    (c/buffer-texel-fetch 
+          material_index (c/cast-to-int (c/add material_index_float 0.5))
+          uAmbientColor (c/buffer-texel-fetch 
                              material_tex_buf :vec3 (c/add (c/mul material_index 3) 0))
-          uDiffuseColor    (c/buffer-texel-fetch 
+          uDiffuseColor (c/buffer-texel-fetch 
                              material_tex_buf :vec3 (c/add (c/mul material_index 3) 1))
-          uSpecularColor   (c/buffer-texel-fetch 
+          uSpecularColor (c/buffer-texel-fetch 
                              material_tex_buf :vec3 (c/add (c/mul material_index 3) 2))
           ambientColor (c/mul ambientStrength  uAmbientColor)
           normal (c/normalize vNormal)
@@ -175,9 +170,7 @@
                                      0.0) 
                                    shininess)
           specularColor (c/mul specularStrength reflect-intensity uSpecularColor)]
-      (c/vec4 (c/add ambientColor diffuseColor specularColor) 1.0)
-      (c/vec4 1.0 1.0 1.0 1.0)
-      )))
+      (c/vec4 (c/add ambientColor diffuseColor specularColor) 1.0))))
 
 ; --- PIPELINE ---
 
