@@ -75,7 +75,7 @@
      [com.github.kotlin-graphics/glm "0.01"]]
     (lwjgl-deps-with-natives)))
 
-(defproject clsl "0.2.0"
+(defproject clsl "0.2.1"
   :description "LWJGL3 based clojure graphics library"
   :url "https://github.com/rutenkolkc/clsl"
   :license {:name "MIT License"
