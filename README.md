@@ -4,11 +4,11 @@ LWJGL3 based Graphics programming in Clojure.
 
 [![Clojars Project](https://img.shields.io/clojars/v/clsl.svg)](https://clojars.org/clsl)
 
-Write your shaders in clojure-like code and transpile to the OpenGL Shading Language glsl without actually using glsl. Hence the Name clsl, or Clojure shading Language.
+Write your shaders in clojure-like code and transpile to the OpenGL Shading Language glsl without actually using glsl. Hence the Name clsl, or Clojure shading language.
 
 ## Why?
 
-Graphics programming is done through APIs like OpenGL, which expose heavily state-driven functionality and require a lot of care to use. You have to write "shader programs" in a certain shading language and are not free to choose. This is a stark contrast to the functional and dynamic way of dealing with things. Furthermore, native APIS are painful to use from clojure, but luckily there is the excellent LWJGL project to help us out. While LWJGL simply mimicks the availabe libraries, this is a framework ontop of LWJGL3 to provide graphics programming in a functional fashion in clojure.    
+Graphics programming is done through APIs like OpenGL, which expose heavily state-driven functionality and require a lot of care to use. You have to write "shader programs" in a certain shading language and are not free to choose. This is a stark contrast to the functional and dynamic way of dealing with problems, which clojure users are accustomed to. Furthermore, native APIS are painful to use from clojure, but luckily there is the excellent LWJGL project to help us out. While LWJGL simply mimicks the availabe libraries, this is a framework ontop of LWJGL3 to provide graphics programming in a functional fashion in clojure.    
 
 Currently clsl mimicks only a subset of Clojure and "Clojure-like" code, as well as OpenGL functionality since there are limitations to this process. See below.
 
