@@ -65,10 +65,10 @@ Simply require clsl.core as some alias into your namespace and get going.
              tr-buf-count [:objs :tr-buf-count]
              t [:time]]
     demo-render-pipeline
-    [(c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4) 0)
-     (c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4) (c/size-of-type :vec4))
-     (.rotate (glm.mat4x4.Mat4.) (* t 0.001) (glm.vec3.Vec3. 0 0 -1))
-     (+ 0.5 (* 0.5 (Math/sin (* t 0.005))))]
+    [(c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4) 0)                       ;pos
+     (c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4) (c/size-of-type :vec4))  ;color
+     (.rotate (glm.mat4x4.Mat4.) (* t 0.001) (glm.vec3.Vec3. 0 0 -1))               ;mvp
+     (+ 0.5 (* 0.5 (Math/sin (* t 0.005))))]                                        ;light_factor
     (c/drawarrays :triangles 0 tr-buf-count)))
 
 (defn my-state-init-fn [state]
