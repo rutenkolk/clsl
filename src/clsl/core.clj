@@ -2063,8 +2063,16 @@ new-pipe (assoc-in
 
 (def keyinput-queue (java.util.concurrent.ConcurrentLinkedQueue.))
 
-(defn init-window! [height width title fullscreen? swapinterval]
-  (let [errorCallback (GLFWErrorCallback/createPrint System/err)
+(defn init-window! [config-map
+                    ;height width title fullscreen? swapinterval
+                    
+                    ]
+  (let [height (:height config-map)
+        width (:width config-map)
+        title (:title config-map)
+        fullscreen? (:fullscreen config-map)
+        swapinterval (:vsync config-map)
+        errorCallback (GLFWErrorCallback/createPrint System/err)
         _ (glfwSetErrorCallback errorCallback)
         _ (when-not (glfwInit)
             (throw  (IllegalStateException. "Unable to initialize GLFW")))
@@ -2075,6 +2083,7 @@ new-pipe (assoc-in
         _ (glfwWindowHint GLFW_OPENGL_FORWARD_COMPAT GL_TRUE)
         _ (glfwWindowHint GLFW_CONTEXT_VERSION_MAJOR 4)
         _ (glfwWindowHint GLFW_CONTEXT_VERSION_MINOR 5)
+        _ (glfwWindowHint GLFW_SAMPLES 4)
         vidmode (glfwGetVideoMode (glfwGetPrimaryMonitor))
         _ (glfwWindowHint GLFW_REFRESH_RATE (.refreshRate vidmode))
         monw (if fullscreen? (.width vidmode) width)
@@ -2107,7 +2116,10 @@ new-pipe (assoc-in
       :errorCallback errorCallback
       :keyCallback keyCallback
       :key-callback-map callback-map
-      :window window)))
+      :window window)
+    (-> config-map
+        (assoc :width monw)
+        (assoc :height monh))))
 
 (defn apply-input-updates! [in-state]
   (let [callback-map (:key-callback-map in-state)] 
@@ -2125,18 +2137,32 @@ new-pipe (assoc-in
                        state)))) 
           state)))))
 
-(defn init-gl! [width height]
-  (org.lwjgl.opengl.GL/createCapabilities)
-  (println "OpenGL version:" (glGetString GL_VERSION))
-  (glClearColor 0.0 0.0 0.0 0.0)
-  (glViewport 0 0 width height))
-(defn init! "returns window handle" [] 
-  (init-window! 1000 1000 "beta" false 0)
-  (init-gl! 1000 1000)
+(defn init-gl! [config-map]
+  (let [width (:width config-map) 
+        height (:height config-map)] 
+    (org.lwjgl.opengl.GL/createCapabilities)
+    (println "OpenGL version:" (glGetString GL_VERSION))
+    (glClearColor 0.0 0.0 0.0 0.0)
+    (glViewport 0 0 width height)))
+(defn init! "returns window handle" [config-map] 
+  (-> config-map
+      (init-window!) 
+      (init-gl!))
   (:window @global-state))
+
+(defn config-map-fill-in [config-map]
+  (-> config-map
+      (update :width #(if % % 1000))
+      (update :height #(if % % 1000))
+      (update :title #(if % % "CLSL APP"))
+      (update :fullscreen #(if % % false))
+      (update :msaa #(if % % 4))
+      (update :vsync #(if % 1 0))))
+
 (defn start! 
-  ([] (start! identity))
-  ([init-fn]
+  ([] (start! identity {}))
+  ([init-fn] (start! init-fn {}))
+  ([init-fn config-map-raw]
   (let [dyn-drawer-updater 
         (fn [state] 
           (let [not-yet-compiled (-> state :internals :not-compiled-drawers-keys)]
@@ -2146,7 +2172,8 @@ new-pipe (assoc-in
                         (-> state :internals :drawers)
                         not-yet-compiled))
               [:internals :not-compiled-drawers-keys]
-              nil)))]
+              nil)))
+        config-map (config-map-fill-in config-map-raw)]
     (try
       (println "INIT...")
       (println "RUNNING ON THREAD: " )
@@ -2154,7 +2181,7 @@ new-pipe (assoc-in
       (with-local-vars [start-t (System/nanoTime)
                         num-frames 0] 
       (let [update-thread (Thread. (fn [] (while (not (:should-stop? @global-state)) (update!))))
-            window-handle (init!)]
+            window-handle (init! config-map)]
         (println "DELAYED DEFS...")
         (def-delayed-defs!)
         (add-update-fn-with-context! dyn-drawer-updater)
@@ -2198,9 +2225,7 @@ new-pipe (assoc-in
         (.free (:keyCallback @global-state))
         (.free (:errorCallback @global-state))
         (glfwDestroyWindow (:window @global-state))
-        (.clear keyinput-queue)
-        
-        ))
+        (.clear keyinput-queue)))
 
       (finally
         (glfwTerminate)))

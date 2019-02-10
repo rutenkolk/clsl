@@ -250,7 +250,7 @@
 (defn demo []
   (c/add-update-fn! update-fn)
   (c/add-drawer! (create-obj-drawer))
-  (c/start! init-fn)
+  (c/start! init-fn {:fullscreen true})
   (println "fps stats:")
   (clojure.pprint/pprint (-> @c/global-state :internals :fps-stats))
   (c/reset-global-state!)
