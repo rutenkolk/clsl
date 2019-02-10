@@ -258,4 +258,5 @@
 
 (comment
   (demo)
+  (.clear c/keyinput-queue)
   (c/stop&reset!))

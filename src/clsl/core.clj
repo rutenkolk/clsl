@@ -5,6 +5,10 @@
            (javax.imageio ImageIO))
  (:require clojure.pprint)
  (:require [clojure.java.io :as io])
+ (:require [clojure.core.async
+             :as a
+             :refer [>! <! >!! <!! go chan buffer close! thread
+                     alts! alts!! timeout]])
  (:gen-class)
  )
 
@@ -1896,6 +1900,169 @@ new-pipe (assoc-in
   (Thread/sleep 500)
   (reset-global-state!))
 
+(def key-map 
+  {
+;???      GLFW_KEY_UNKNOWN
+"space"         GLFW_KEY_SPACE
+"'"             GLFW_KEY_APOSTROPHE
+","             GLFW_KEY_COMMA
+"-"             GLFW_KEY_MINUS
+"."             GLFW_KEY_PERIOD
+"/"             GLFW_KEY_SLASH
+"0"             GLFW_KEY_0
+"1"             GLFW_KEY_1
+"2"             GLFW_KEY_2
+"3"             GLFW_KEY_3
+"4"             GLFW_KEY_4
+"5"             GLFW_KEY_5
+"6"             GLFW_KEY_6
+"7"             GLFW_KEY_7
+"8"             GLFW_KEY_8
+"9"             GLFW_KEY_9
+";"             GLFW_KEY_SEMICOLON
+"="             GLFW_KEY_EQUAL
+"a"             GLFW_KEY_A
+"b"             GLFW_KEY_B
+"c"             GLFW_KEY_C
+"d"             GLFW_KEY_D
+"e"             GLFW_KEY_E
+"f"             GLFW_KEY_F
+"g"             GLFW_KEY_G
+"h"             GLFW_KEY_H
+"i"             GLFW_KEY_I
+"j"             GLFW_KEY_J
+"k"             GLFW_KEY_K
+"l"             GLFW_KEY_L
+"m"             GLFW_KEY_M
+"n"             GLFW_KEY_N
+"o"             GLFW_KEY_O
+"p"             GLFW_KEY_P
+"q"             GLFW_KEY_Q
+"r"             GLFW_KEY_R
+"s"             GLFW_KEY_S
+"t"             GLFW_KEY_T
+"u"             GLFW_KEY_U
+"v"             GLFW_KEY_V
+"w"             GLFW_KEY_W
+"x"             GLFW_KEY_X
+"y"             GLFW_KEY_Y
+"z"             GLFW_KEY_Z
+"["             GLFW_KEY_LEFT_BRACKET
+"\\"            GLFW_KEY_BACKSLASH
+"]"             GLFW_KEY_RIGHT_BRACKET
+"`"             GLFW_KEY_GRAVE_ACCENT
+;???            GLFW_KEY_WORLD_1
+;???            GLFW_KEY_WORLD_2
+"escape"        GLFW_KEY_ESCAPE
+"enter"         GLFW_KEY_ENTER
+"tab"           GLFW_KEY_TAB
+"backspace"     GLFW_KEY_BACKSPACE
+"insert"        GLFW_KEY_INSERT
+"delete"        GLFW_KEY_DELETE
+"right"         GLFW_KEY_RIGHT 
+"left"          GLFW_KEY_LEFT
+"down"          GLFW_KEY_DOWN
+"up"            GLFW_KEY_UP
+"page-up"       GLFW_KEY_PAGE_UP
+"page-down"     GLFW_KEY_PAGE_DOWN
+"home"          GLFW_KEY_HOME
+"end"           GLFW_KEY_END
+"caps"          GLFW_KEY_CAPS_LOCK
+"scroll-lock"   GLFW_KEY_SCROLL_LOCK
+"num-lock"      GLFW_KEY_NUM_LOCK
+"print-screen"  GLFW_KEY_PRINT_SCREEN
+"pause"         GLFW_KEY_PAUSE
+"fn-1"          GLFW_KEY_F1
+"fn-2"          GLFW_KEY_F2
+"fn-3"          GLFW_KEY_F3
+"fn-4"          GLFW_KEY_F4
+"fn-5"          GLFW_KEY_F5
+"fn-6"          GLFW_KEY_F6
+"fn-7"          GLFW_KEY_F7
+"fn-8"          GLFW_KEY_F8
+"fn-9"          GLFW_KEY_F9
+"fn-10"         GLFW_KEY_F10
+"fn-11"         GLFW_KEY_F11
+"fn-12"         GLFW_KEY_F12
+"fn-13"         GLFW_KEY_F13
+"fn-14"         GLFW_KEY_F14
+"fn-15"         GLFW_KEY_F15
+"fn-16"         GLFW_KEY_F16
+"fn-17"         GLFW_KEY_F17
+"fn-18"         GLFW_KEY_F18
+"fn-19"         GLFW_KEY_F19
+"fn-20"         GLFW_KEY_F20
+"fn-21"         GLFW_KEY_F21
+"fn-22"         GLFW_KEY_F22
+"fn-23"         GLFW_KEY_F23
+"fn-24"         GLFW_KEY_F24
+"fn-25"         GLFW_KEY_F25
+"kp-0"          GLFW_KEY_KP_0
+"kp-1"          GLFW_KEY_KP_1
+"kp-2"          GLFW_KEY_KP_2
+"kp-3"          GLFW_KEY_KP_3
+"kp-4"          GLFW_KEY_KP_4
+"kp-5"          GLFW_KEY_KP_5
+"kp-6"          GLFW_KEY_KP_6
+"kp-7"          GLFW_KEY_KP_7
+"kp-8"          GLFW_KEY_KP_8
+"kp-9"          GLFW_KEY_KP_9
+"kp-decimal"    GLFW_KEY_KP_DECIMAL
+"kp-divide"     GLFW_KEY_KP_DIVIDE
+"kp-multiply"   GLFW_KEY_KP_MULTIPLY
+"kp-subtract"   GLFW_KEY_KP_SUBTRACT
+"kp-add"        GLFW_KEY_KP_ADD
+"kp-enter"      GLFW_KEY_KP_ENTER
+"kp-equal"      GLFW_KEY_KP_EQUAL
+"shift"         GLFW_KEY_LEFT_SHIFT
+"control"       GLFW_KEY_LEFT_CONTROL
+"alt"           GLFW_KEY_LEFT_ALT
+"super"         GLFW_KEY_LEFT_SUPER
+"right-shift"   GLFW_KEY_RIGHT_SHIFT
+"right-control" GLFW_KEY_RIGHT_CONTROL
+"right-alt"     GLFW_KEY_RIGHT_ALT
+"right-super"   GLFW_KEY_RIGHT_SUPER
+"menu"          GLFW_KEY_MENU})
+
+(def action-map 
+  {"press"   GLFW_PRESS
+   "release" GLFW_RELEASE
+   "repeat"  GLFW_REPEAT})
+
+(def modifier-map
+  {"shift"   GLFW_MOD_SHIFT
+   "control" GLFW_MOD_CONTROL
+   "alt"     GLFW_MOD_ALT
+   "super"   GLFW_MOD_SUPER})
+
+(defn powerset [coll]
+  (apply clojure.set/union #{(set coll)} (map (fn [i] (powerset (disj (set coll) i))) (set coll))))
+
+(def key-map-inverse
+  (clojure.set/map-invert key-map))
+(def action-map-inverse
+  (clojure.set/map-invert action-map))
+(def modifier-map-inverse
+  (clojure.set/map-invert modifier-map))
+
+(def modifier-combination-map
+  (apply 
+    hash-map 
+    (flatten 
+      (map
+        (fn [combination] [combination (reduce bit-or 0 (map (comp modifier-map name) combination))])
+        (powerset (keys modifier-map))))))
+
+(def modifier-combination-map-inverse
+  (clojure.set/map-invert modifier-combination-map))
+
+(defn selector-to-key [key action modifiers]
+  [(key-map (name key)) 
+   (action-map (name action)) 
+   (reduce bit-or 0 (map (comp modifier-map name) modifiers))])
+
+(def keyinput-queue (java.util.concurrent.ConcurrentLinkedQueue.))
+
 (defn init-window! [height width title fullscreen? swapinterval]
   (let [errorCallback (GLFWErrorCallback/createPrint System/err)
         _ (glfwSetErrorCallback errorCallback)
@@ -1922,11 +2089,12 @@ new-pipe (assoc-in
                             (/  (-  (.height vidmode) height) 2)))
         _ (when (= window nil)
             (throw  (RuntimeException. "Failed to create the GLFW window")))
-        keyCallback (proxy  [GLFWKeyCallback]  []
+        callback-map {(selector-to-key :escape :release []) 
+                      (fn [state] (glfwSetWindowShouldClose window true) state)}
+        keyCallback (proxy  [GLFWKeyCallback] []
                       (invoke [window key scancode action mods]
-                        (when (and (= key GLFW_KEY_ESCAPE)
-                                   (= action GLFW_RELEASE))
-                               (glfwSetWindowShouldClose window true))))
+                        (.offer keyinput-queue [key action mods])))
+        _ (println (callback-map (selector-to-key :escape :release [])))
         _ (glfwSetKeyCallback window keyCallback)
         _ (let [vidmode (glfwGetVideoMode (glfwGetPrimaryMonitor))]
               (glfwShowWindow window))]
@@ -1938,7 +2106,25 @@ new-pipe (assoc-in
       :last-time  (System/currentTimeMillis)
       :errorCallback errorCallback
       :keyCallback keyCallback
+      :key-callback-map callback-map
       :window window)))
+
+(defn apply-input-updates! [in-state]
+  (let [callback-map (:key-callback-map in-state)] 
+    (loop [state in-state]
+      (let [in (.poll keyinput-queue)] 
+        (if in 
+          (recur (let [callbackfn (callback-map in)]
+                   (if callbackfn (callbackfn state)
+                     (do
+                       (println 
+                         "NO CALLBACK REGISTERED FOR:" 
+                         [(key-map-inverse (first in))
+                          (action-map-inverse (second in))
+                          (modifier-combination-map-inverse (second (rest in)))])
+                       state)))) 
+          state)))))
+
 (defn init-gl! [width height]
   (org.lwjgl.opengl.GL/createCapabilities)
   (println "OpenGL version:" (glGetString GL_VERSION))
@@ -1972,6 +2158,7 @@ new-pipe (assoc-in
         (println "DELAYED DEFS...")
         (def-delayed-defs!)
         (add-update-fn-with-context! dyn-drawer-updater)
+        (add-update-fn! apply-input-updates!)
         (println "CALLING INIT-FN...")
         (with-glGetError (swap! global-state init-fn))
         (println "ENTERING HOT LOOP...")
@@ -2010,7 +2197,10 @@ new-pipe (assoc-in
         ;the driver is a better deallocater than we are. we just play nice with glfw
         (.free (:keyCallback @global-state))
         (.free (:errorCallback @global-state))
-        (glfwDestroyWindow (:window @global-state))))
+        (glfwDestroyWindow (:window @global-state))
+        (.clear keyinput-queue)
+        
+        ))
 
       (finally
         (glfwTerminate)))

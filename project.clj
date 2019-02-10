@@ -72,7 +72,8 @@
    '[[org.clojure/clojure "1.8.0"]
      [org.reflections/reflections "0.9.11"]
      [org.joml/joml "1.9.9"]
-     [com.github.kotlin-graphics/glm "0.01"]]
+     [com.github.kotlin-graphics/glm "0.01"]
+     [org.clojure/core.async "0.4.490"]]
     (lwjgl-deps-with-natives)))
 
 (defproject clsl "0.2.1"
