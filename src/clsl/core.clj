@@ -1678,7 +1678,6 @@ new-pipe (assoc-in
 
 (defn buf-wrap "slower buf fallback" [coll]
   (let [coll-t (type (first coll))
-        _ (println "buf-wrap:" (type (first coll)))
         host-buf (cond 
                    (= coll-t java.lang.Float)
                      (let [b (BufferUtils/createFloatBuffer (count coll))
@@ -1900,6 +1899,9 @@ new-pipe (assoc-in
   (Thread/sleep 500)
   (reset-global-state!))
 
+(defn halt! "you violated the law" []
+  (glfwSetWindowShouldClose (:window @global-state) true))
+
 (def key-map 
   {
 ;???      GLFW_KEY_UNKNOWN
@@ -2098,8 +2100,10 @@ new-pipe (assoc-in
                             (/  (-  (.height vidmode) height) 2)))
         _ (when (= window nil)
             (throw  (RuntimeException. "Failed to create the GLFW window")))
-        callback-map {(selector-to-key :escape :release []) 
-                      (fn [state] (glfwSetWindowShouldClose window true) state)}
+        callback-map (merge 
+                       (:key-callback-map config-map)
+                       {(selector-to-key :escape :release []) 
+                        (fn [state] (glfwSetWindowShouldClose window true) state)})
         keyCallback (proxy  [GLFWKeyCallback] []
                       (invoke [window key scancode action mods]
                         (.offer keyinput-queue [key action mods])))

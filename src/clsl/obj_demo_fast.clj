@@ -218,20 +218,27 @@
                :normal-mat (.transpose (.inverse (glm.mat3x3.Mat3. model-mat)))
                :view-position [0 0 0]
                :fov 60
+               :distance 10
+               :distance-delta 0
                :start-time (System/currentTimeMillis)}
         :time 0)))
 
 (defn update-fn [state]
-  (let [new-t (- (System/currentTimeMillis) (-> state :objs :start-time)) 
-        t (* 0.001 new-t)
-        distance 10
-        r (+ 1 (/ distance 2) (* (/ distance 2) (Math/sin (* 0.5 t))))
+  (let [now (System/currentTimeMillis)
+        t (* 0.001 (- now (-> state :objs :start-time)))
+        dt (- now (:time state))
+        min-distance 2
+        distance (max 
+                   min-distance 
+                   (+ (-> state :objs :distance) 
+                      (* 0.5 dt (-> state :objs :distance-delta))))
+        r (+ 1 (/ distance 2) (* (/ distance 2)))
         height (+ (/ distance 4) (* (/ distance 4) (Math/sin (* 0.3 t)))) 
         projection (.perspective glm.glm/INSTANCE 
                                  (Math/toRadians (-> state :objs :fov))
                                  (float (/ (:width state) (:height state)))
                                  0.01   ;near plane
-                                 100.0) ;far plane
+                                 1000.0) ;far plane
         view-position [(* r (Math/cos t)) height (* r (Math/sin t))]
         view-mat (.lookAt glm.glm/INSTANCE 
                           (glm.vec3.Vec3. (nth view-position 0)
@@ -244,13 +251,44 @@
       (update-in state [:objs] merge
                {:view-projection-mat view-projection 
                 :view-mat view-mat 
-                :view-position view-position}) 
-      :time new-t)))
+                :view-position view-position
+                :distance distance
+                
+                }) 
+      :time now)))
+
+(def input-callback-map
+  {(c/selector-to-key :s :press #{}) 
+     #(assoc-in % [:objs :distance-delta] 0.01) 
+   (c/selector-to-key :s :release #{}) 
+     #(update-in % [:objs :distance-delta] (partial min 0)) 
+
+   (c/selector-to-key :s :press #{:shift}) 
+     #(assoc-in % [:objs :distance-delta] 0.1) 
+   (c/selector-to-key :s :release #{:shift}) 
+     #(update-in % [:objs :distance-delta] (partial min 0)) 
+
+   (c/selector-to-key :w :press #{}) 
+     #(assoc-in % [:objs :distance-delta] -0.01)
+   (c/selector-to-key :w :release #{}) 
+     #(update-in % [:objs :distance-delta] (partial max 0))
+
+   (c/selector-to-key :w :press #{:shift}) 
+     #(assoc-in % [:objs :distance-delta] -0.1)
+   (c/selector-to-key :w :release #{:shift}) 
+     #(update-in % [:objs :distance-delta] (partial max 0))
+
+   (c/selector-to-key :shift :press #{}) 
+     #(update-in % [:objs :distance-delta] (fn [d] (* d 10.0)))
+   (c/selector-to-key :shift :release #{:shift}) 
+     #(update-in % [:objs :distance-delta] (fn [d] (/ d 10.0)))})
 
 (defn demo []
   (c/add-update-fn! update-fn)
   (c/add-drawer! (create-obj-drawer))
-  (c/start! init-fn {:fullscreen true})
+  (c/start! init-fn 
+    {:fullscreen true
+     :key-callback-map input-callback-map})
   (println "fps stats:")
   (clojure.pprint/pprint (-> @c/global-state :internals :fps-stats))
   (c/reset-global-state!)
