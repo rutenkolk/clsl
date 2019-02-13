@@ -9,8 +9,7 @@
              :as a
              :refer [>! <! >!! <!! go chan buffer close! thread
                      alts! alts!! timeout]])
- (:gen-class)
- )
+ (:gen-class))
 
 (use 'clojure.data)
 
@@ -1823,6 +1822,13 @@ new-pipe (assoc-in
              (assoc-in state [:internals :update-fns key] new-update-fn)))
     key))
 
+(defn add-prio-update-fn! 
+  ([new-update-fn]
+    (swap! 
+      global-state 
+      (fn [state] 
+        (update-in state [:internals :prio-update-fns] #(cons new-update-fn %))))))
+
 (defn add-update-fn-with-context! 
   ([new-update-fn]
     (let [generated-key (keyword (gensym "__drawer__"))]
@@ -1846,7 +1852,11 @@ new-pipe (assoc-in
 (defn update! []
   (swap! global-state
          (fn [state]
-           (reduce #(%2 %1) state (-> state :internals :update-fns (vals))))))
+           (let [prio-update-fns (-> state :internals :prio-update-fns)
+                 prio-updated-state (reduce #(%2 %1) state prio-update-fns)] 
+             (reduce #(%2 %1) 
+                     prio-updated-state 
+                     (-> state :internals :update-fns (vals)))))))
 
 (defn update-with-context! 
   ([] (let [state @global-state]
@@ -2058,12 +2068,22 @@ new-pipe (assoc-in
 (def modifier-combination-map-inverse
   (clojure.set/map-invert modifier-combination-map))
 
-(defn selector-to-key [key action modifiers]
-  [(key-map (name key)) 
-   (action-map (name action)) 
-   (reduce bit-or 0 (map (comp modifier-map name) modifiers))])
+(def mouse-button-map
+  {"left"  GLFW_MOUSE_BUTTON_LEFT
+   "right" GLFW_MOUSE_BUTTON_RIGHT
+   "middle" GLFW_MOUSE_BUTTON_MIDDLE})
+
+(defn selector-to-key 
+  ([button action]
+    [(mouse-button-map (name button))
+     (action-map (name action))])
+  ([key action modifiers]
+    [(key-map (name key)) 
+     (action-map (name action)) 
+     (reduce bit-or 0 (map (comp modifier-map name) modifiers))]))
 
 (def keyinput-queue (java.util.concurrent.ConcurrentLinkedQueue.))
+(def mouseinput-queue (java.util.concurrent.ConcurrentLinkedQueue.))
 
 (defn init-window! [config-map
                     ;height width title fullscreen? swapinterval
@@ -2100,14 +2120,25 @@ new-pipe (assoc-in
                             (/  (-  (.height vidmode) height) 2)))
         _ (when (= window nil)
             (throw  (RuntimeException. "Failed to create the GLFW window")))
-        callback-map (merge 
-                       (:key-callback-map config-map)
-                       {(selector-to-key :escape :release []) 
-                        (fn [state] (glfwSetWindowShouldClose window true) state)})
+        key-callback-map (if (:key-callback-map config-map)
+                           (:key-callback-map config-map)
+                           {(selector-to-key :escape :release []) 
+                            (fn [state] (glfwSetWindowShouldClose window true) state)})
         keyCallback (proxy  [GLFWKeyCallback] []
                       (invoke [window key scancode action mods]
                         (.offer keyinput-queue [key action mods])))
-        _ (println (callback-map (selector-to-key :escape :release [])))
+        mouse-button-callback-map (if (:mouse-button-callback-map config-map)
+                                      (:mouse-button-callback-map config-map)
+                                      {})
+        mouse-button-callback (let [xbuf (BufferUtils/createDoubleBuffer 1)
+                                    ybuf (BufferUtils/createDoubleBuffer 1)] 
+                                (proxy [org.lwjgl.glfw.GLFWMouseButtonCallback] []
+                                  (invoke [w key action mods]
+                                    (glfwGetCursorPos window xbuf ybuf)
+                                    (.offer mouseinput-queue 
+                                            [key action (.get xbuf 0) (.get ybuf 0)]))))
+        _ (glfwSetMouseButtonCallback window mouse-button-callback)
+        _ (glfwSetInputMode window GLFW_CURSOR (:disable-cursor? config-map))
         _ (glfwSetKeyCallback window keyCallback)
         _ (let [vidmode (glfwGetVideoMode (glfwGetPrimaryMonitor))]
               (glfwShowWindow window))]
@@ -2119,27 +2150,54 @@ new-pipe (assoc-in
       :last-time  (System/currentTimeMillis)
       :errorCallback errorCallback
       :keyCallback keyCallback
-      :key-callback-map callback-map
+      :key-callback-map key-callback-map
+      :mouse-button-callback-map mouse-button-callback-map
       :window window)
     (-> config-map
         (assoc :width monw)
         (assoc :height monh))))
 
-(defn apply-input-updates! [in-state]
+(defn apply-keyboard-input-updates! [in-state]
   (let [callback-map (:key-callback-map in-state)] 
     (loop [state in-state]
       (let [in (.poll keyinput-queue)] 
         (if in 
-          (recur (let [callbackfn (callback-map in)]
-                   (if callbackfn (callbackfn state)
+          (recur 
+            (let [callbackfn (callback-map in)]
+              (if callbackfn (callbackfn state)
+                (do
+                  (println 
+                    "NO CALLBACK REGISTERED FOR:" 
+                    [(key-map-inverse (first in))
+                     (action-map-inverse (second in))
+                     (modifier-combination-map-inverse (second (rest in)))])
+                  state)))) 
+          state)))))
+
+(let [xbuf (BufferUtils/createDoubleBuffer 1)
+      ybuf (BufferUtils/createDoubleBuffer 1)]  
+  (defn apply-mouse-pos-input-updates! [in-state]
+    (glfwGetCursorPos (:window in-state) xbuf ybuf)
+    (assoc-in in-state [:internals :current-mouse-pos] [(.get xbuf 0) (.get ybuf 0)])))
+
+(defn apply-mouse-button-input-updates! [in-state]
+  (let [callback-map (:mouse-button-callback-map in-state)] 
+    (loop [state in-state]
+      (let [[key action x y] (.poll mouseinput-queue)] 
+        (if key 
+          (recur (let [callbackfn (callback-map [key action])]
+                   (if callbackfn (callbackfn state x y)
                      (do
                        (println 
-                         "NO CALLBACK REGISTERED FOR:" 
-                         [(key-map-inverse (first in))
-                          (action-map-inverse (second in))
-                          (modifier-combination-map-inverse (second (rest in)))])
+                         "NO CALLBACK REGISTERED for mouse" )
                        state)))) 
           state)))))
+
+(defn apply-input-updates! [in-state]
+  (-> in-state
+      (apply-keyboard-input-updates!)
+      (apply-mouse-button-input-updates!)
+      (apply-mouse-pos-input-updates!)))
 
 (defn init-gl! [config-map]
   (let [width (:width config-map) 
@@ -2161,7 +2219,9 @@ new-pipe (assoc-in
       (update :title #(if % % "CLSL APP"))
       (update :fullscreen #(if % % false))
       (update :msaa #(if % % 4))
-      (update :vsync #(if % 1 0))))
+      (update :vsync #(if % 1 0))
+      (update :disable-cursor? #(if % GLFW_CURSOR_DISABLED GLFW_CURSOR_NORMAL))
+      ))
 
 (defn start! 
   ([] (start! identity {}))
@@ -2189,7 +2249,7 @@ new-pipe (assoc-in
         (println "DELAYED DEFS...")
         (def-delayed-defs!)
         (add-update-fn-with-context! dyn-drawer-updater)
-        (add-update-fn! apply-input-updates!)
+        (add-prio-update-fn! apply-input-updates!)
         (println "CALLING INIT-FN...")
         (with-glGetError (swap! global-state init-fn))
         (println "ENTERING HOT LOOP...")
@@ -2229,7 +2289,8 @@ new-pipe (assoc-in
         (.free (:keyCallback @global-state))
         (.free (:errorCallback @global-state))
         (glfwDestroyWindow (:window @global-state))
-        (.clear keyinput-queue)))
+        (.clear keyinput-queue)
+        (.clear mouseinput-queue)))
 
       (finally
         (glfwTerminate)))

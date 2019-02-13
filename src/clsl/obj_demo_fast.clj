@@ -233,7 +233,11 @@
                    (+ (-> state :objs :distance) 
                       (* 0.5 dt (-> state :objs :distance-delta))))
         r (+ 1 (/ distance 2) (* (/ distance 2)))
-        height (+ (/ distance 4) (* (/ distance 4) (Math/sin (* 0.3 t)))) 
+        height (+ (/ distance 4) (* (/ distance 4) 
+                                    
+                                    ;(Math/sin (* 0.3 t))
+                                    
+                                    )) 
         projection (.perspective glm.glm/INSTANCE 
                                  (Math/toRadians (-> state :objs :fov))
                                  (float (/ (:width state) (:height state)))
@@ -281,20 +285,30 @@
    (c/selector-to-key :shift :press #{}) 
      #(update-in % [:objs :distance-delta] (fn [d] (* d 10.0)))
    (c/selector-to-key :shift :release #{:shift}) 
-     #(update-in % [:objs :distance-delta] (fn [d] (/ d 10.0)))})
+     #(update-in % [:objs :distance-delta] (fn [d] (/ d 10.0)))
+
+   (c/selector-to-key :escape :release [])
+     (fn [state] (c/halt!) state)})
+
+(def mouse-input-callback-map
+  {(c/selector-to-key :left :press) 
+     (fn [state x y] (println "press at (X,Y)=" x y) state)})
 
 (defn demo []
   (c/add-update-fn! update-fn)
   (c/add-drawer! (create-obj-drawer))
   (c/start! init-fn 
     {:fullscreen true
-     :key-callback-map input-callback-map})
+     :key-callback-map input-callback-map
+     :mouse-button-callback-map mouse-input-callback-map
+     :disable-cursor? true})
   (println "fps stats:")
-  (clojure.pprint/pprint (-> @c/global-state :internals :fps-stats))
+  (clojure.pprint/pprint (reverse (-> @c/global-state :internals :fps-stats)))
   (c/reset-global-state!)
   "Demo completed. Global State has been reset!")
 
 (comment
   (demo)
   (.clear c/keyinput-queue)
+  (.clear c/mouseinput-queue)
   (c/stop&reset!))
