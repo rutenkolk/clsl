@@ -2,7 +2,7 @@
 
 ;; per-os jvm-opts code cribbed from Overtone
 (def JVM-OPTS
-  {:common  []
+  {:common  ["-Djdk.attach.allowAttachSelf" "-XX:+UnlockDiagnosticVMOptions" "-XX:+DebugNonSafepoints"]
   :macosx   ["-XstartOnFirstThread" "-Djava.awt.headless=true"]
   :linux    []
   :windows  []})
@@ -73,6 +73,7 @@
      [org.reflections/reflections "0.9.11"]
      [org.joml/joml "1.9.9"]
      [com.github.kotlin-graphics/glm "0.01"]
+     [com.clojure-goes-fast/clj-async-profiler "0.3.0"]
      [org.clojure/core.async "0.4.490"]]
     (lwjgl-deps-with-natives)))
 

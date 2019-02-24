@@ -991,23 +991,23 @@ just extend the protocol to your liking"
 
 (defn uniform-fn-for-glsl-type [t]
   (cond
-    (= :int t)   glUniform1iv
-    (= :float t) glUniform1fv
-    (= :vec2 t)  glUniform2fv
-    (= :vec3 t)  glUniform3fv
-    (= :vec4 t)  glUniform4fv
+    (= :int t)   (fn [loc ^ints v] (org.lwjgl.opengl.GL20/glUniform1iv ^int loc ^ints v))
+    (= :float t) (fn [loc ^floats v] (org.lwjgl.opengl.GL20/glUniform1fv ^int loc ^floats v))
+    (= :vec2 t)  (fn [loc ^floats v] (org.lwjgl.opengl.GL20/glUniform2fv ^int loc ^floats v))
+    (= :vec3 t)  (fn [loc ^floats v] (org.lwjgl.opengl.GL20/glUniform3fv ^int loc ^floats v))
+    (= :vec4 t)  (fn [loc ^floats v] (org.lwjgl.opengl.GL20/glUniform4fv ^int loc ^floats v))
 
-    (= :mat2 t)   (fn [loc v] (glUniformMatrix2fv loc false v))
-    (= :mat2x3 t) (fn [loc v] (glUniformMatrix2x3fv loc false v))
-    (= :mat3x2 t) (fn [loc v] (glUniformMatrix3x2fv loc false v))
-    (= :mat4x2 t) (fn [loc v] (glUniformMatrix4x2fv loc false v))
+    (= :mat2 t)   (fn [loc ^floats v] (org.lwjgl.opengl.GL20/glUniformMatrix2fv ^int loc false ^floats v))
+    (= :mat2x3 t) (fn [loc ^floats v] (org.lwjgl.opengl.GL21/glUniformMatrix2x3fv ^int loc false ^floats v))
+    (= :mat3x2 t) (fn [loc ^floats v] (org.lwjgl.opengl.GL21/glUniformMatrix3x2fv ^int loc false ^floats v))
+    (= :mat4x2 t) (fn [loc ^floats v] (org.lwjgl.opengl.GL21/glUniformMatrix4x2fv ^int loc false ^floats v))
 
-    (= :mat3 t)   (fn [loc v] (glUniformMatrix3fv loc false v))
-    (= :mat3x4 t) (fn [loc v] (glUniformMatrix3x4fv loc false v))
-    (= :mat4x3 t) (fn [loc v] (glUniformMatrix4x3fv loc false v))
+    (= :mat3 t)   (fn [loc ^floats v] (org.lwjgl.opengl.GL20/glUniformMatrix3fv ^int loc false ^floats v))
+    (= :mat3x4 t) (fn [loc ^floats v] (org.lwjgl.opengl.GL21/glUniformMatrix3x4fv ^int loc false ^floats v))    
+    (= :mat4x3 t) (fn [loc ^floats v] (org.lwjgl.opengl.GL21/glUniformMatrix4x3fv ^int loc false ^floats v))
 
-    (= :mat4 t)   (fn [loc v] (glUniformMatrix4fv loc false v))
-    
+    (= :mat4 t)   (fn [loc ^floats v] (org.lwjgl.opengl.GL20/glUniformMatrix4fv ^int loc false ^floats v))    
+
     (= :sampler2D t) (fn [loc v] (glActiveTexture (+ GL_TEXTURE0 loc)) 
                                  (glBindTexture GL_TEXTURE_2D v) 
                                  (glUniform1i loc loc))
@@ -2084,6 +2084,17 @@ new-pipe (assoc-in
 
 (def keyinput-queue (java.util.concurrent.ConcurrentLinkedQueue.))
 (def mouseinput-queue (java.util.concurrent.ConcurrentLinkedQueue.))
+(def global-mouse-pos (java.util.concurrent.atomic.AtomicLong.))
+
+(defn mouse-encode-in-long [x y]
+  (let [x-hack (Float/floatToRawIntBits ^float (float x))
+        y-hack (Float/floatToRawIntBits ^float (float y))
+        x-shifted (bit-shift-left (bit-and 0xffffffff x-hack) 32)
+        y-shifted (bit-and 0xffffffff y-hack 32)]
+    (bit-xor x-shifted y-hack)))
+(defn mouse-decode-long [l]
+  [(Float/intBitsToFloat ^int (unchecked-int (bit-shift-right l 32))) 
+   (Float/intBitsToFloat ^int (unchecked-int (bit-shift-right (bit-shift-left l 32) 32)))])
 
 (defn init-window! [config-map
                     ;height width title fullscreen? swapinterval
@@ -2124,9 +2135,14 @@ new-pipe (assoc-in
                            (:key-callback-map config-map)
                            {(selector-to-key :escape :release []) 
                             (fn [state] (glfwSetWindowShouldClose window true) state)})
+        mouse-position-callback (proxy [org.lwjgl.glfw.GLFWCursorPosCallback] []
+                                  (invoke [window x y]
+                                   (.set ^java.util.concurrent.atomic.AtomicLong global-mouse-pos
+                                         ^long (mouse-encode-in-long x y))))
         keyCallback (proxy  [GLFWKeyCallback] []
                       (invoke [window key scancode action mods]
-                        (.offer keyinput-queue [key action mods])))
+                        (.offer ^java.util.concurrent.ConcurrentLinkedQueue 
+                                keyinput-queue [key action mods])))
         mouse-button-callback-map (if (:mouse-button-callback-map config-map)
                                       (:mouse-button-callback-map config-map)
                                       {})
@@ -2134,10 +2150,14 @@ new-pipe (assoc-in
                                     ybuf (BufferUtils/createDoubleBuffer 1)] 
                                 (proxy [org.lwjgl.glfw.GLFWMouseButtonCallback] []
                                   (invoke [w key action mods]
-                                    (glfwGetCursorPos window xbuf ybuf)
-                                    (.offer mouseinput-queue 
+                                    (org.lwjgl.glfw.GLFW/glfwGetCursorPos ^long window
+                                                                          ^java.nio.DirectDoubleBufferU xbuf
+                                                                          ^java.nio.DirectDoubleBufferU ybuf)
+                                    (.offer ^java.util.concurrent.ConcurrentLinkedQueue
+                                            mouseinput-queue 
                                             [key action (.get xbuf 0) (.get ybuf 0)]))))
         _ (glfwSetMouseButtonCallback window mouse-button-callback)
+        _ (glfwSetCursorPosCallback window mouse-position-callback) ;??
         _ (glfwSetInputMode window GLFW_CURSOR (:disable-cursor? config-map))
         _ (glfwSetKeyCallback window keyCallback)
         _ (let [vidmode (glfwGetVideoMode (glfwGetPrimaryMonitor))]
@@ -2160,7 +2180,7 @@ new-pipe (assoc-in
 (defn apply-keyboard-input-updates! [in-state]
   (let [callback-map (:key-callback-map in-state)] 
     (loop [state in-state]
-      (let [in (.poll keyinput-queue)] 
+      (let [in (.poll ^java.util.concurrent.ConcurrentLinkedQueue keyinput-queue)] 
         (if in 
           (recur 
             (let [callbackfn (callback-map in)]
@@ -2174,16 +2194,20 @@ new-pipe (assoc-in
                   state)))) 
           state)))))
 
-(let [xbuf (BufferUtils/createDoubleBuffer 1)
-      ybuf (BufferUtils/createDoubleBuffer 1)]  
-  (defn apply-mouse-pos-input-updates! [in-state]
-    (glfwGetCursorPos (:window in-state) xbuf ybuf)
-    (assoc-in in-state [:internals :current-mouse-pos] [(.get xbuf 0) (.get ybuf 0)])))
+;(let [xbuf (BufferUtils/createDoubleBuffer 1)
+;      ybuf (BufferUtils/createDoubleBuffer 1)]  
+;  (defn apply-mouse-pos-input-updates! [in-state]
+;    (org.lwjgl.glfw.GLFW/glfwGetCursorPos ^long (:window in-state) ^java.nio.DirectDoubleBufferU xbuf ^java.nio.DirectDoubleBufferU ybuf)
+;    (assoc-in in-state [:internals :current-mouse-pos] [(.get xbuf 0) (.get ybuf 0)])))
+
+(defn apply-mouse-pos-input-updates! [in-state]
+  (assoc-in in-state [:internals :current-mouse-pos] 
+            (mouse-decode-long (.get ^java.util.concurrent.atomic.AtomicLong global-mouse-pos))))
 
 (defn apply-mouse-button-input-updates! [in-state]
   (let [callback-map (:mouse-button-callback-map in-state)] 
     (loop [state in-state]
-      (let [[key action x y] (.poll mouseinput-queue)] 
+      (let [[key action x y] (.poll ^java.util.concurrent.ConcurrentLinkedQueue mouseinput-queue)] 
         (if key 
           (recur (let [callbackfn (callback-map [key action])]
                    (if callbackfn (callbackfn state x y)
