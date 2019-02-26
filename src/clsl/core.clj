@@ -192,9 +192,10 @@
    :mat4x3 (* 4 3 4)
    :mat4 (* 4 4 4)
    })
-
-(defn size-of-type [& ts]
+(defn size-of-type-impl [& ts]
   (reduce + (map size-type-map ts)))
+
+(def size-of-type (memoize size-of-type-impl))
 
 ;it is somewhat not-fun to make a transpiler using:
 ;no function-pointers/functors/functions as values, no dynamic features, no polymorphism, and several other little pitfalls 
@@ -1590,7 +1591,7 @@ new-pipe (assoc-in
                              (apply concat 
                                (map 
                                  (fn [[bind-name q-vec]]
-                                  `(~bind-name (retrieve-nested ~'init-state ~q-vec))) 
+                                  `(~bind-name (-> ~'init-state ~@q-vec))) 
                                  (partition 2 2 query-statement))))
         interface-fill-fn `(fn [~'init-state]
                              (let ~state-queries-bind
@@ -1844,6 +1845,35 @@ new-pipe (assoc-in
 
 ;TODO: drawer sorting. Ommitting in this version
 ;only render those, that have a compiled OpenGL program
+;(defn get-big-exec-fn-from-drawers-impl [ds]
+;  (let [drawers-w-programs (filter :program ds)
+;        args (map (fn [d] [(:exec-fn d) (:program d) (:vao d)]) drawers-w-programs)
+;        exec-fns-partials (map (fn [[e-fn program vao]] 
+;                                 (list e-fn program vao 'state )) args)
+;        generated-fn-form (concat `(fn [~'state]) exec-fns-partials)
+;        _ (pp generated-fn-form)
+;        _ (pp "HEEEEY")
+;        big-fn (try
+;                 (eval generated-fn-form)
+;                 (catch Throwable e (do
+;                                      (pp e))))
+;        _ (pp big-fn)
+;        _ (inc nil)
+;        ] 
+;    big-fn))
+;(def get-big-exec-fn-from-drawers (memoize get-big-exec-fn-from-drawers-impl))
+;(defn render! []
+;  (let [state @global-state]
+;    ((get-big-exec-fn-from-drawers (-> state :internals :drawers (vals))) state)))
+;THE EXAMPLE BELOW WORKS, BUT THE CODE ABOVE DOES NOT. :(
+;(let [myfn (fn [a b] (println a (inc b)))
+;      form (concat `(fn [~'state]) (list (list myfn 'state 4)
+;                                         (list myfn 'state 7)))
+;      _ (pp form)
+;      evaled-fn (eval form)
+;      res (evaled-fn "test")] 
+;  res) 
+
 (defn render! []
   (let [state @global-state]
     (doseq [d (filter :program (-> state :internals :drawers (vals)))] 

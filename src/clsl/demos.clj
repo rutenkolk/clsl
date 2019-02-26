@@ -15,15 +15,17 @@
   (doall (map #(%) demos)))
 
 (comment
+  (double (* 1000 (/ 200)))
   "Please call any of the demo-fns."
   (do
-    (prof/start)
-    (obj-fast/demo)
+    (prof/start {:threads true})
+    (obj/demo)
     (prof/stop))
   ((nth demos 0))
   ((nth demos 1))
   ((nth demos 2))
   ...
+  (clsl.core/stop&reset!)
   (texture/demo)
   (all-demos!)) 
 
