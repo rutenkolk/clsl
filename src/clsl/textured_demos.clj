@@ -73,7 +73,15 @@
      (c/buf-take tr-buf :vec4 (c/size-of-type :vec4 :vec4 :vec2) (c/size-of-type :vec4))
      (let [adjusted_t (* t 0.001)
            s (+ 0.5 (/ (Math/sin (* t 0.001 t-off)) (inc scale-factor)))] 
-       (.times 
+
+       (comment this is how i envision glm to actually look like in clsl <3
+        (glm/*
+         (scale (vec3 s s s))
+         (rotate (vec3 0 0 -1))
+         (translate (vec3 offx offy 0))
+         (rotate (* -2 adjusted_t) (vec3 0 0 -1))))
+
+       (.times
         (.scale glm.glm/INSTANCE (glm.mat4x4.Mat4. 1) (glm.vec3.Vec3. s s s))
         (.times
          (.rotate glm.glm/INSTANCE (glm.mat4x4.Mat4. 1) adjusted_t (glm.vec3.Vec3. 0 0 -1))

@@ -19,15 +19,28 @@
   "Please call any of the demo-fns."
   (do
     (prof/start {:threads true})
-    (obj/demo)
+    (obj-fast/demo)
+
     (prof/stop))
+
+  perf-file
+
+  (prof/list-event-types)
+
   ((nth demos 0))
+
   ((nth demos 1))
+
   ((nth demos 2))
+
   ...
   (clsl.core/stop&reset!)
   (texture/demo)
-  (all-demos!)) 
+
+  (all-demos!)
+  (obj-fast/demo)
+
+  )
 
 (defn -main [& args]
   (all-demos!))

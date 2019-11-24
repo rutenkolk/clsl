@@ -184,26 +184,26 @@
 
 ; --- DRAWER ---
 
-(defn create-obj-drawer []
-  (c/drawer [mesh [:objs :model]
-             materials [:objs :materials] 
-             view-position [:objs :view-position]
-             view-projection-mat [:objs :view-projection-mat]
-             view-mat [:objs :view-mat]
-             model-mat [:objs :model-mat]
-             normal-mat [:objs :normal-mat]
-             material-tex [:objs :materials-buf-texture]]
-    obj-render-pipeline
-    [(c/buf-take (:vertices-buf mesh) :vec3 (c/size-of-type :vec3) 0)
-     (c/buf-take (:normals-buf mesh) :vec3 (c/size-of-type :vec3) 0)
-     model-mat
-     view-projection-mat
-     normal-mat
-     [-5 5 5]
-     view-position
-     material-tex
-     (c/buf-take (:material-index-buf mesh) :int (c/size-of-type :int) 0)] 
-    (c/draw-elements :triangles 0 (:element-count mesh) (:elements-buf mesh)))) 
+(defn create-obj-drawer [[offx offy]]
+  (let [model-mat (.translate glm.glm/INSTANCE (glm.mat4x4.Mat4. 1) (glm.vec3.Vec3. offx offy 0))]
+    (c/drawer [mesh [:objs :model]
+              materials [:objs :materials] 
+              view-position [:objs :view-position]
+              view-projection-mat [:objs :view-projection-mat]
+              view-mat [:objs :view-mat]
+              normal-mat [:objs :normal-mat]
+              material-tex [:objs :materials-buf-texture]]
+             obj-render-pipeline
+             [(c/buf-take (:vertices-buf mesh) :vec3 (c/size-of-type :vec3) 0)
+              (c/buf-take (:normals-buf mesh) :vec3 (c/size-of-type :vec3) 0)
+              model-mat
+              view-projection-mat
+              normal-mat
+              [-5 5 5]
+              view-position
+              material-tex
+              (c/buf-take (:material-index-buf mesh) :int (c/size-of-type :int) 0)] 
+             (c/draw-elements :triangles 0 (:element-count mesh) (:elements-buf mesh))))) 
 
 (defn init-fn [state]
   (let [model (load-obj-model "res/magnet.obj")
@@ -296,19 +296,46 @@
 
 (defn demo []
   (c/add-update-fn! update-fn)
-  (c/add-drawer! (create-obj-drawer))
+
+  (c/add-drawer! (create-obj-drawer [0 0]))
+
   (c/start! init-fn 
     {:fullscreen true
      :key-callback-map input-callback-map
      :mouse-button-callback-map mouse-input-callback-map
-     :disable-cursor? true})
+     :disable-cursor? false})
   (println "fps stats:")
   (clojure.pprint/pprint (reverse (-> @c/global-state :internals :fps-stats)))
   (c/reset-global-state!)
   "Demo completed. Global State has been reset!")
 
+(defn demo-stress-test []
+  (c/add-update-fn! update-fn)
+
+  (let [n 15 d 7]
+    (doall
+     (for [x (range (- (* d n)) (* d n) d)
+           y (range (- (* d n)) (* d n) d)]
+       (c/add-drawer! (create-obj-drawer [x y]))
+       )))
+
+
+  (c/start! init-fn 
+            {:fullscreen true
+             :key-callback-map input-callback-map
+             :mouse-button-callback-map mouse-input-callback-map
+             :disable-cursor? false})
+  (println "fps stats:")
+  (clojure.pprint/pprint (reverse (-> @c/global-state :internals :fps-stats)))
+  (c/reset-global-state!)
+  "Demo completed. Global State has been reset!")
 (comment
   (demo)
+
   (.clear c/keyinput-queue)
+
   (.clear c/mouseinput-queue)
-  (c/stop&reset!))
+
+  (c/stop&reset!)
+
+  )
